@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Portal de Proveedores</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./static/css/app.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-brand">
+    <svg aria-label="Portal Proveedores" width="32" height="32" viewBox="0 0 32 32" fill="none">
+      <rect width="32" height="32" rx="8" fill="rgba(255,255,255,.15)"/>
+      <path d="M8 22L16 10L24 22" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <circle cx="16" cy="22" r="2" fill="#fff"/>
+    </svg>
+    <span class="header-logo-text">Portal Proveedores</span>
+    <span class="header-badge">Acceso</span>
+  </div>
+  <div class="header-user" id="headerUser" style="display:none">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+    </svg>
+    <span id="headerEmail"></span>
+  </div>
+</header>
+
+<main class="page-main">
+
+<!-- STEP 0: LOGIN -->
+<section class="step active" id="step-login">
+  <div class="card" style="max-width:480px;margin:0 auto">
+    <p style="font-size:.72rem;font-weight:700;color:var(--blue);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.75rem">Portal de Proveedores</p>
+    <h1 style="font-size:clamp(1.4rem,1.2rem + 1vw,2rem);font-weight:700;color:var(--text);margin-bottom:.75rem;line-height:1.2">
+      Accede con tu correo electrónico
+    </h1>
+    <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:2rem;line-height:1.6">
+      Introduce tu correo. Te enviaremos un código de acceso de 6 dígitos válido durante 5 minutos.
+    </p>
+    <div class="form-group">
+      <label class="form-label" for="emailInput">Correo electrónico</label>
+      <input class="form-control" type="email" id="emailInput" placeholder="proveedor@empresa.com" autocomplete="email">
+      <p class="field-error" id="emailError" style="display:none"></p>
+    </div>
+    <button class="btn btn-primary btn-lg" id="sendOtpBtn" onclick="sendOtp()" style="width:100%;margin-top:.25rem">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/>
+      </svg>
+      Enviar código de acceso
+    </button>
+    <p style="font-size:.75rem;color:var(--text-faint);text-align:center;margin-top:1.25rem">
+      ¿Problemas de acceso? Escribe a <a href="mailto:proveedores@tuempresa.com" style="color:var(--blue)">proveedores@tuempresa.com</a>
+    </p>
+  </div>
+</section>
+
+<!-- STEP 1: OTP -->
+<section class="step" id="step-otp">
+  <div class="card" style="max-width:480px;margin:0 auto;text-align:center">
+    <div style="width:56px;height:56px;background:#e8f0fe;border-radius:var(--radius-full);display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2">
+        <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
+      </svg>
+    </div>
+    <h2 style="font-size:1.25rem;font-weight:700;color:var(--text);margin-bottom:.5rem">Introduce tu código</h2>
+    <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.25rem">Código de 6 dígitos enviado a</p>
+    <p style="font-weight:600;color:var(--blue);font-size:.9rem;margin-bottom:1.5rem" id="otpEmailDisplay"></p>
+    <div class="otp-inputs" id="step-otp-inputs">
+      <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+      <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+      <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+      <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+      <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+      <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+    </div>
+    <p class="field-error" id="otpError" style="display:none;text-align:center"></p>
+    <button class="btn btn-primary btn-lg" id="verifyOtpBtn" onclick="verifyOtp()" style="width:100%">Verificar código</button>
+    <button class="btn btn-secondary btn-sm" onclick="backToLogin()" style="margin-top:.75rem">← Cambiar correo</button>
+    <p style="font-size:.75rem;color:var(--text-faint);margin-top:1rem" id="otpTimer"></p>
+    <button class="btn btn-secondary btn-sm" id="resendBtn" onclick="sendOtp(true)" style="display:none;margin-top:.5rem">Reenviar código</button>
+  </div>
+</section>
+
+<!-- STEP 2: FORMULARIO -->
+<section class="step" id="step-form">
+  <div class="card" style="margin-bottom:1.5rem">
+    <p style="font-size:.72rem;font-weight:700;color:var(--blue);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.4rem">Mi perfil de proveedor</p>
+    <h2 style="font-size:1.2rem;font-weight:700;color:var(--text)">Información de alta en el sistema</h2>
+    <p style="color:var(--text-muted);font-size:.88rem;margin-top:.35rem">Completa todos los apartados para que podamos gestionar tu alta como proveedor.</p>
+  </div>
+
+  <div class="card-grid">
+    <div class="card-sm">
+      <div class="card-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 3H8a2 2 0 00-2 2v2h12V5a2 2 0 00-2-2z"/></svg></div>
+      <p class="card-title">Datos fiscales</p><p class="card-desc">Razón social, NIF/CIF y dirección.</p>
+      <div class="card-status"><span class="badge badge-pendiente" id="statusFiscal">Pendiente</span></div>
+    </div>
+    <div class="card-sm">
+      <div class="card-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+      <p class="card-title">Contacto</p><p class="card-desc">Email, teléfono y persona de contacto.</p>
+      <div class="card-status"><span class="badge badge-pendiente" id="statusContacto">Pendiente</span></div>
+    </div>
+    <div class="card-sm">
+      <div class="card-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div>
+      <p class="card-title">Cuenta bancaria</p><p class="card-desc">IBAN para la tramitación de pagos.</p>
+      <div class="card-status"><span class="badge badge-pendiente" id="statusBancario">Pendiente</span></div>
+    </div>
+    <div class="card-sm">
+      <div class="card-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+      <p class="card-title">Documentación</p><p class="card-desc">CIF, certificados y documentos.</p>
+      <div class="card-status"><span class="badge badge-pendiente" id="statusDocs">Pendiente</span></div>
+    </div>
+  </div>
+
+  <form id="supplierForm" novalidate>
+    <div class="card">
+      <div class="form-section">1. Datos fiscales</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label" for="razon_social">Razón social <span style="color:var(--error)">*</span></label><input class="form-control" type="text" id="razon_social" name="razon_social" required></div>
+        <div class="form-group"><label class="form-label" for="nombre_comercial">Nombre comercial</label><input class="form-control" type="text" id="nombre_comercial" name="nombre_comercial"></div>
+        <div class="form-group"><label class="form-label" for="nif">NIF / CIF <span style="color:var(--error)">*</span></label><input class="form-control" type="text" id="nif" name="nif" placeholder="B12345678" required></div>
+        <div class="form-group"><label class="form-label" for="actividad">Actividad económica</label><input class="form-control" type="text" id="actividad" name="actividad"></div>
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label" for="direccion">Dirección fiscal <span style="color:var(--error)">*</span></label><input class="form-control" type="text" id="direccion" name="direccion" required></div>
+        <div class="form-group"><label class="form-label" for="codigo_postal">Código postal</label><input class="form-control" type="text" id="codigo_postal" name="codigo_postal" placeholder="28001"></div>
+        <div class="form-group"><label class="form-label" for="ciudad">Ciudad</label><input class="form-control" type="text" id="ciudad" name="ciudad"></div>
+      </div>
+
+      <div class="form-section">2. Datos de contacto</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label" for="persona_contacto">Persona de contacto <span style="color:var(--error)">*</span></label><input class="form-control" type="text" id="persona_contacto" name="persona_contacto" required></div>
+        <div class="form-group"><label class="form-label" for="email_contacto">Email de contacto <span style="color:var(--error)">*</span></label><input class="form-control" type="email" id="email_contacto" name="email_contacto" required></div>
+        <div class="form-group"><label class="form-label" for="telefono">Teléfono</label><input class="form-control" type="tel" id="telefono" name="telefono" placeholder="+34 600 000 000"></div>
+      </div>
+
+      <div class="form-section">3. Datos bancarios</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label" for="iban">IBAN <span style="color:var(--error)">*</span></label><input class="form-control" type="text" id="iban" name="iban" placeholder="ES00 0000 0000 0000 0000 0000" required></div>
+        <div class="form-group"><label class="form-label" for="banco">Entidad bancaria</label><input class="form-control" type="text" id="banco" name="banco"></div>
+      </div>
+
+      <div class="form-section">4. Documentación adjunta</div>
+      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">Sube CIF/NIF, certificados AEAT y Seguridad Social u otros documentos requeridos.</p>
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="handleFiles(this.files)">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" stroke-width="1.5" style="margin:0 auto .75rem">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <p style="font-size:.88rem;color:var(--text-muted)">Arrastra aquí los ficheros o <strong style="color:var(--blue)">haz clic para seleccionar</strong></p>
+        <p style="font-size:.75rem;color:var(--text-faint);margin-top:.35rem">PDF, JPG, PNG, DOC, DOCX · máx. 10 MB por fichero</p>
+      </div>
+      <div id="fileList" style="margin-top:.75rem;display:flex;flex-direction:column;gap:.5rem"></div>
+
+      <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--divider);display:flex;gap:.75rem;flex-wrap:wrap">
+        <button type="button" class="btn btn-secondary" onclick="saveDraft()">Guardar borrador</button>
+        <button type="submit" class="btn btn-primary" id="submitFormBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Enviar para revisión
+        </button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<!-- STEP 3: CONFIRMACIÓN -->
+<section class="step" id="step-done">
+  <div class="card" style="max-width:520px;margin:0 auto;text-align:center">
+    <div style="width:64px;height:64px;background:#e8f5e9;border-radius:var(--radius-full);display:flex;align-items:center;justify-content:center;margin:0 auto 1.5rem">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <h2 style="font-size:1.4rem;font-weight:700;color:var(--text);margin-bottom:.75rem">¡Información enviada!</h2>
+    <p style="color:var(--text-muted);font-size:.9rem;max-width:46ch;margin:0 auto 2rem;line-height:1.7">
+      Tu documentación ha sido recibida. Nuestro equipo la revisará y recibirás un correo de confirmación en los próximos días hábiles.
+    </p>
+    <button class="btn btn-secondary" onclick="goToForm()">Volver a mi perfil</button>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+  © <span id="year"></span> Portal de Proveedores &nbsp;·&nbsp; Todos los derechos reservados
+</footer>
+
+<div id="toast" role="alert" aria-live="polite"></div>
+
+<script src="./static/js/login.js"></script>
+<script src="./static/js/supplier-form.js"></script>
+<script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+</body>
+</html>

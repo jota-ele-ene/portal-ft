@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Gestión de Proveedores — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./static/css/app.css">
+  <style>
+    .page-main{max-width:1100px}
+  </style>
+</head>
+<body>
+<header class="site-header">
+  <div class="header-brand">
+    <svg aria-label="Portal" width="32" height="32" viewBox="0 0 32 32" fill="none">
+      <rect width="32" height="32" rx="8" fill="rgba(255,255,255,.15)"/>
+      <path d="M8 22L16 10L24 22" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="16" cy="22" r="2" fill="#fff"/>
+    </svg>
+    <span class="header-logo-text">Portal Proveedores</span>
+    <span class="header-badge">Admin</span>
+  </div>
+  <div class="header-user" id="adminUserArea" style="display:none">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+    <span id="adminEmailDisplay"></span>
+    <button class="btn btn-sm btn-secondary" onclick="logout()" style="margin-left:.5rem">Salir</button>
+  </div>
+</header>
+
+<main class="page-main">
+
+  <section class="step active" id="admin-login">
+    <div class="card" style="max-width:420px;margin:0 auto">
+      <p style="font-size:.72rem;font-weight:700;color:var(--blue);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.75rem">Panel de administración</p>
+      <h1 style="font-size:1.4rem;font-weight:700;margin-bottom:1.5rem">Gestión de proveedores</h1>
+      <div class="form-group">
+        <label class="form-label" for="adminEmailInput">Correo administrador</label>
+        <input class="form-control" type="email" id="adminEmailInput" placeholder="admin@empresa.com" autocomplete="email">
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:.25rem" onclick="adminLogin()">
+        Acceder con código OTP
+      </button>
+    </div>
+  </section>
+
+  <section class="step" id="admin-otp">
+    <div class="card" style="max-width:420px;margin:0 auto;text-align:center">
+      <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:.5rem">Introduce tu código</h2>
+      <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:1.25rem" id="adminOtpEmail"></p>
+      <div class="otp-inputs" id="adminOtpInputs">
+        <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+      </div>
+      <p class="field-error" id="adminOtpError" style="display:none;text-align:center"></p>
+      <button class="btn btn-primary" style="width:100%" onclick="adminVerifyOtp()">Verificar código</button>
+      <button class="btn btn-secondary btn-sm" onclick="showAdminStep('admin-login')" style="margin-top:.5rem">← Volver</button>
+    </div>
+  </section>
+
+  <section class="step" id="admin-dashboard">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
+      <div>
+        <h1 style="font-size:1.3rem;font-weight:700">Proveedores registrados</h1>
+        <p style="color:var(--text-muted);font-size:.88rem;margin-top:.25rem" id="supplierCount">Cargando…</p>
+      </div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+        <input class="form-control" type="search" id="searchInput" placeholder="Buscar…" style="width:200px" oninput="filterTable()">
+        <select class="form-control" id="statusFilter" style="width:150px" onchange="filterTable()">
+          <option value="">Todos los estados</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="revision">En revisión</option>
+          <option value="aprobado">Aprobado</option>
+          <option value="rechazado">Rechazado</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="loadSuppliers()">⟳ Actualizar</button>
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Razón social</th>
+            <th>NIF</th>
+            <th>Email</th>
+            <th>Estado</th>
+            <th>Actualizado</th>
+            <th>Cambiar estado</th>
+          </tr>
+        </thead>
+        <tbody id="suppliersBody">
+          <tr><td colspan="6" style="text-align:center;padding:2.5rem;color:var(--text-faint)">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+<footer class="site-footer">© <span id="year"></span> Portal de Proveedores · Panel de administración</footer>
+<div id="toast" role="alert" aria-live="polite"></div>
+<script src="./static/js/admin.js"></script>
+<script>document.getElementById('year').textContent=new Date().getFullYear();</script>
+</body>
+</html>

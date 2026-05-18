@@ -1,0 +1,82 @@
+version: "3.9"
+
+services:
+
+  # ── Nginx: gateway API + servidor del frontend ──────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: portal_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend:/usr/share/nginx/html:ro
+    depends_on:
+      - auth
+      - gestion
+      - archivos
+    restart: unless-stopped
+    networks:
+      - portal-net
+
+  # ── Microservicio Auth (Node.js) ─────────────────────────────────────────
+  auth:
+    build:
+      context: ./services/auth
+    container_name: portal_auth
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-cambia-este-secreto-en-produccion}
+      - TOKEN_EXPIRE_MINUTES=${TOKEN_EXPIRE_MINUTES:-120}
+      - OTP_TTL_SECONDS=${OTP_TTL_SECONDS:-300}
+      - SMTP_HOST=${SMTP_HOST:-localhost}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-portal@tuempresa.com}
+      - AUTH_DB_PATH=/data/auth.json
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-admin@tuempresa.com}
+    volumes:
+      - portal_data:/data
+    restart: unless-stopped
+    networks:
+      - portal-net
+
+  # ── Microservicio Gestión (Node.js) ──────────────────────────────────────
+  gestion:
+    build:
+      context: ./services/gestion
+    container_name: portal_gestion
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-cambia-este-secreto-en-produccion}
+      - GESTION_DB_PATH=/data/suppliers.json
+    volumes:
+      - portal_data:/data
+    restart: unless-stopped
+    networks:
+      - portal-net
+
+  # ── Microservicio Archivos (Node.js) ─────────────────────────────────────
+  archivos:
+    build:
+      context: ./services/archivos
+    container_name: portal_archivos
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-cambia-este-secreto-en-produccion}
+      - UPLOADS_DIR=/data/uploads
+      - STATIC_DIR=/app/static
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-admin@tuempresa.com}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-10}
+    volumes:
+      - portal_data:/data
+      - ./frontend/static:/app/static:ro
+    restart: unless-stopped
+    networks:
+      - portal-net
+
+volumes:
+  portal_data:
+    driver: local
+
+networks:
+  portal-net:
+    driver: bridge

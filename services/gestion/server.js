@@ -1,0 +1,149 @@
+/**
+ * Microservicio Gestión — Puerto 8002
+ *
+ * GET    /suppliers/me                    → perfil del proveedor autenticado
+ * PUT    /suppliers/me                    → actualiza perfil
+ * GET    /suppliers/admin/list            → lista todos (solo admin)
+ * PATCH  /suppliers/admin/:id/status      → cambia estado (solo admin)
+ * GET    /health
+ */
+
+'use strict';
+
+const express = require('express');
+const cors    = require('cors');
+const jwt     = require('jsonwebtoken');
+const fs      = require('fs');
+const path    = require('path');
+const crypto  = require('crypto');
+
+const app  = express();
+const PORT = process.env.PORT || 8002;
+
+const SECRET_KEY = process.env.JWT_SECRET       || 'cambia-este-secreto-en-produccion';
+const DB_PATH    = process.env.GESTION_DB_PATH  || '/data/suppliers.json';
+
+// ── JSON store ─────────────────────────────────────────────────────────────────
+function loadDB() {
+  try {
+    if (!fs.existsSync(DB_PATH)) {
+      fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+      fs.writeFileSync(DB_PATH, JSON.stringify({ suppliers: [] }), 'utf8');
+    }
+    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  } catch {
+    return { suppliers: [] };
+  }
+}
+
+function saveDB(data) {
+  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
+}
+
+// ── Middleware ─────────────────────────────────────────────────────────────────
+app.use(cors());
+app.use(express.json());
+
+function authenticate(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return res.status(401).json({ detail: 'Token no proporcionado.' });
+  }
+  try {
+    req.user = jwt.verify(auth.slice(7), SECRET_KEY);
+    next();
+  } catch {
+    res.status(401).json({ detail: 'Token inválido o expirado.' });
+  }
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ detail: 'Acceso restringido a administradores.' });
+  }
+  next();
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function getOrCreate(db, email) {
+  let s = db.suppliers.find(x => x.email === email);
+  if (!s) {
+    s = {
+      id:         crypto.randomUUID(),
+      email,
+      status:     'pendiente',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    db.suppliers.push(s);
+  }
+  return s;
+}
+
+function hasMinimum(s) {
+  return s.razon_social && s.nif && s.persona_contacto && s.iban;
+}
+
+const ALLOWED_FIELDS = [
+  'razon_social','nombre_comercial','nif','actividad','direccion',
+  'codigo_postal','ciudad','persona_contacto','email_contacto',
+  'telefono','iban','banco'
+];
+
+const VALID_STATUSES = new Set(['pendiente','revision','aprobado','rechazado']);
+
+// ── Rutas ──────────────────────────────────────────────────────────────────────
+app.get('/health', (req, res) => res.json({ status: 'ok', service: 'gestion' }));
+
+app.get('/suppliers/me', authenticate, (req, res) => {
+  const db = loadDB();
+  const s  = getOrCreate(db, req.user.sub);
+  saveDB(db);
+  res.json(s);
+});
+
+app.put('/suppliers/me', authenticate, (req, res) => {
+  const db    = loadDB();
+  const email = req.user.sub;
+  let s       = db.suppliers.find(x => x.email === email);
+
+  const updates = {};
+  ALLOWED_FIELDS.forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
+  updates.updated_at = new Date().toISOString();
+
+  if (s) {
+    Object.assign(s, updates);
+  } else {
+    s = { id: crypto.randomUUID(), email, status: 'pendiente', created_at: new Date().toISOString(), ...updates };
+    db.suppliers.push(s);
+  }
+
+  if (hasMinimum(s) && s.status === 'pendiente') s.status = 'revision';
+  saveDB(db);
+  res.json(s);
+});
+
+app.get('/suppliers/admin/list', authenticate, requireAdmin, (req, res) => {
+  const db = loadDB();
+  res.json({ suppliers: db.suppliers, total: db.suppliers.length });
+});
+
+app.patch('/suppliers/admin/:id/status', authenticate, requireAdmin, (req, res) => {
+  const { status } = req.body;
+  if (!VALID_STATUSES.has(status)) {
+    return res.status(400).json({ detail: `Estado inválido. Válidos: ${[...VALID_STATUSES].join(', ')}` });
+  }
+  const db = loadDB();
+  const s  = db.suppliers.find(x => x.id === req.params.id);
+  if (!s) return res.status(404).json({ detail: 'Proveedor no encontrado.' });
+  s.status     = status;
+  s.updated_at = new Date().toISOString();
+  saveDB(db);
+  res.json(s);
+});
+
+// ── Start ──────────────────────────────────────────────────────────────────────
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`[gestion] Servicio corriendo en puerto ${PORT}`);
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+});
