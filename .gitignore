@@ -1,0 +1,4 @@
+.env
+services/archivos/node_modules/
+services/auth/node_modules/
+services/gestion/node_modules/
