@@ -21,7 +21,8 @@ const app  = express();
 const PORT = process.env.PORT || 8002;
 
 const SECRET_KEY = process.env.JWT_SECRET       || 'cambia-este-secreto-en-produccion';
-const DB_PATH    = process.env.GESTION_DB_PATH  || '/data/suppliers.json';
+const DATA_PATH    = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
+const DB_PATH      = process.env.GESTION_DB_PATH || path.join(DATA_PATH, 'suppliers.json');
 
 // ── JSON store ─────────────────────────────────────────────────────────────────
 function loadDB() {
@@ -40,9 +41,6 @@ function saveDB(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
 }
 
-// ── Middleware ─────────────────────────────────────────────────────────────────
-app.use(cors());
-app.use(express.json());
 
 function authenticate(req, res, next) {
   const auth = req.headers.authorization;
@@ -143,7 +141,11 @@ app.patch('/suppliers/admin/:id/status', authenticate, requireAdmin, (req, res) 
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────────
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[gestion] Servicio corriendo en puerto ${PORT}`);
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => console.log(`[gestion] Puerto ${PORT}`));
+  app.use(cors());
+  app.use(express.json());
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-});
+} else {
+  module.exports = app;
+}

@@ -1,0 +1,31 @@
+<%-
+  include('layout', {
+    title: title,
+    body: `
+  <section class="step active" id="step-login">
+    <div class="card" style="max-width:480px;margin:0 auto">
+      <img src="https://boletines.fundaciontelefonica.com/institucional/wp-content/uploads/sites/7/2026/02/rediseno-ft-asterisco.gif" alt="Identidad Fundación Telefónica" style="margin: 0.5em auto;height: 2.5em;">
+      <h1 style="font-size:clamp(1.4rem,1.2rem + 1vw,2rem);font-weight:700;color:var(--text);margin-bottom:.75rem;line-height:1.2">
+        Bienvenido al portal electrónico de Fundación Telefónica
+      </h1>
+      <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:2rem;line-height:1.6">
+        Introduce tu correo. Te enviaremos un código de acceso de 6 dígitos válido durante 5 minutos.
+      </p>
+      <div class="form-group">
+        <label class="form-label" for="emailInput">Correo electrónico</label>
+        <input class="form-control" type="email" id="emailInput" placeholder="proveedor@empresa.com" autocomplete="email">
+        <p class="field-error" id="emailError" style="display:none"></p>
+      </div>
+      <button class="btn btn-primary btn-lg" id="sendOtpBtn" onclick="sendOtp()" style="margin-top:.5rem">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M22 2L11 13"></path>
+          <path d="M22 2L15 22l-4-9-9-4 20-7z"></path>
+        </svg>
+        Enviar código de acceso
+      </button>
+    </div>
+  </section>
+    `,
+    scripts: ['/static/js/login.js']
+  })
+%>

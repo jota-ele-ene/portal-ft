@@ -1,9 +1,11 @@
+window.APP_BASE = window.APP_BASE || window.location.pathname.replace(/\/[^/]*$/, '');
+window.API = window.API || (window.__API_BASE__ || window.APP_BASE).replace(/\/$/, '');
 const pendingFiles = [];
 
 window.loadSupplierData = async function() {
   if (!window.token) return;
   try {
-    const res = await fetch('/api/suppliers/me', { headers: { 'Authorization': 'Bearer ' + window.token } });
+    const res = await fetch(`${API}/suppliers/me`, { headers: { 'Authorization': 'Bearer ' + window.token } });
     if (!res.ok) return;
     const data = await res.json();
     ['razon_social','nombre_comercial','nif','actividad','direccion','codigo_postal','ciudad',
@@ -58,7 +60,7 @@ async function saveSupplierData(submit = false) {
   const btn = document.getElementById('submitFormBtn');
   if (btn) btn.disabled = true;
   try {
-    const res = await fetch('/api/suppliers/me', {
+    const res = await fetch(`${API}/suppliers/me`, {
       method: 'PUT', headers: { 'Authorization': 'Bearer ' + window.token, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
@@ -89,7 +91,7 @@ async function uploadPendingFiles() {
   for (const file of pendingFiles) {
     const fd = new FormData();
     fd.append('file', file);
-    await fetch('/api/documents/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + window.token }, body: fd });
+    await fetch(`${API}/documents/upload`, { method: 'POST', headers: { 'Authorization': 'Bearer ' + window.token }, body: fd });
   }
   pendingFiles.length = 0;
   setBadge('statusDocs', 'aprobado');

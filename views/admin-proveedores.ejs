@@ -1,4 +1,8 @@
-  <section class="step" id="admin-dashboard">
+<%-
+  include('layout', {
+    title: 'Gestión de proveedores',
+    body: `
+  <section id="admin-dashboard">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
       <div>
         <h1 style="font-size:1.3rem;font-weight:700">Proveedores registrados</h1>
@@ -33,4 +37,7 @@
         </tbody>
       </table>
     </div>
-  </section>
+  </section>`,
+    scripts: ['/static/js/admin.js']
+  })
+%>

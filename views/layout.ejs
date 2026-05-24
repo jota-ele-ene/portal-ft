@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title><%= title %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/css/style-ft.css">
+</head>
+<body style="overflow: auto!important;">
+
+  <%- include('partials/header') %>
+
+  <main class="page-main">
+    <%- body %>
+  </main>
+
+  <%- include('partials/footer') %>
+
+  <% if (scripts) { %>
+    <% scripts.forEach(function(src) { %>
+      <script src="<%= src %>"></script>
+    <% }) %>
+  <% } %>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const header = document.querySelector('.site-header');
+  const main   = document.querySelector('main.page-main');
+  if (!header || !main) return;
+
+  // Altura efectiva del main: contenido + padding superior
+  const mainStyles   = window.getComputedStyle(main);
+  const mainPaddingTop = parseFloat(mainStyles.paddingTop) || 0;
+  const fadeDistance = main.offsetHeight + mainPaddingTop;
+
+  function onScroll() {
+    const y = window.scrollY || window.pageYOffset;
+    // factor t entre 0 y 1
+    const tRaw = y / fadeDistance;
+    const t = Math.max(0, Math.min(1, tRaw));
+
+    // Ejemplo 1: interpolar opacidad de 0 → 0.95 sobre blanco
+    const alpha = 0.95 * t;
+    header.style.background = `rgba(255, 255, 255, ${alpha.toFixed(3)})`;
+
+    // Ejemplo 2 (opcional): gradiente que se vuelve más "sólido"
+    // const startAlpha = (0.2 * (1 - t)).toFixed(3);  // más transparente al principio
+    // const endAlpha   = (0.9 * t).toFixed(3);        // más sólido al final
+    // header.style.background =
+    //   `linear-gradient(to bottom, rgba(10, 36, 99, ${startAlpha}), rgba(10, 36, 99, ${endAlpha}))`;
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll(); // estado inicial
+});    
+</script>
+</body>
+</html>

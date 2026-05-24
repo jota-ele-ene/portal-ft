@@ -1,0 +1,33 @@
+<%-
+  include('layout', {
+    title: title,
+    body: `
+  <section class="step active" id="step-otp">
+    <div class="card" style="max-width:480px;margin:0 auto;text-align:center">
+      <div style="width:56px;height:56px;background:#e8f0fe;border-radius:var(--radius-full);display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+          <line x1="12" y1="18" x2="12.01" y2="18"></line>
+        </svg>
+      </div>
+      <h2 style="font-size:1.25rem;font-weight:700;color:var(--text);margin-bottom:.5rem">Introduce tu código</h2>
+      <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.25rem">Código de 6 dígitos enviado a</p>
+      <p style="font-weight:600;color:var(--blue);font-size:.9rem;margin-bottom:1.5rem" id="otpEmailDisplay"></p>
+      <div class="otp-inputs" id="step-otp-inputs">
+        <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
+      </div>
+      <p class="field-error" id="otpError" style="display:none;text-align:center"></p>
+      <button class="btn btn-primary btn-lg" id="verifyOtpBtn" onclick="verifyOtp()">Verificar código</button>
+      <p style="font-size:.75rem;color:var(--text-faint);margin-top:1rem" id="otpTimer"></p>
+      <button class="btn btn-secondary btn-sm" id="resendBtn" onclick="sendOtp(true)" style="display:none;margin-top:.5rem">Reenviar código</button>
+    </div>
+  </section>
+    `,
+    scripts: ['/static/js/login.js']
+  })
+%>

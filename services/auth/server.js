@@ -1,6 +1,6 @@
 /**
  * Microservicio Auth — Puerto 8001
- * 
+ *
  * POST /auth/otp/request  → genera y envía OTP por email
  * POST /auth/otp/verify   → valida OTP y devuelve JWT
  * GET  /health            → health check
@@ -20,19 +20,24 @@ const app  = express();
 const PORT = process.env.PORT || 8001;
 
 // ── Config ─────────────────────────────────────────────────────────────────────
-const SECRET_KEY   = process.env.JWT_SECRET       || 'cambia-este-secreto-en-produccion';
+const SECRET_KEY   = process.env.JWT_SECRET           || 'cambia-este-secreto-en-produccion';
 const TOKEN_EXP    = parseInt(process.env.TOKEN_EXPIRE_MINUTES || '120');
-const OTP_TTL      = parseInt(process.env.OTP_TTL_SECONDS      || '300');
+const OTP_TTL      = parseInt(process.env.OTP_TTL_SECONDS       || '300');
 const SMTP_HOST    = process.env.SMTP_HOST  || 'localhost';
 const SMTP_PORT    = parseInt(process.env.SMTP_PORT || '587');
 const SMTP_USER    = process.env.SMTP_USER  || '';
 const SMTP_PASS    = process.env.SMTP_PASS  || '';
 const SMTP_FROM    = process.env.SMTP_FROM  || 'portal@tuempresa.com';
-const DB_PATH      = process.env.AUTH_DB_PATH || '/data/auth.json';
+const DATA_PATH    = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
+const DB_PATH      = process.env.AUTH_DB_PATH || path.join(DATA_PATH, 'auth.json');
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'admin@tuempresa.com')
-                       .split(',').map(e => e.trim().toLowerCase());
+                      .split(',').map(e => e.trim().toLowerCase());
 
-// ── TinyDB-style JSON store ────────────────────────────────────────────────────
+// ── Middlewares globales ──────────────────────────────────────────────────────
+app.use(cors());
+app.use(express.json());
+
+// ── TinyDB-style JSON store ───────────────────────────────────────────────────
 function loadDB() {
   try {
     if (!fs.existsSync(DB_PATH)) {
@@ -49,10 +54,6 @@ function loadDB() {
 function saveDB(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
 }
-
-// ── Middleware ──────────────────────────────────────────────────────────────────
-app.use(cors());
-app.use(express.json());
 
 // ── Mailer ─────────────────────────────────────────────────────────────────────
 function getTransporter() {
@@ -75,13 +76,21 @@ async function sendOtpEmail(to, otp) {
     from: SMTP_FROM,
     to,
     subject: `Tu código de acceso: ${otp}`,
-    text: `Portal de Proveedores\n\nTu código de acceso es: ${otp}\n\nVálido durante ${Math.floor(OTP_TTL/60)} minutos.\nSi no solicitaste este código, ignóralo.`,
+    text: `Portal de Proveedores
+
+Tu código de acceso es: ${otp}
+
+Válido durante ${Math.floor(OTP_TTL/60)} minutos.
+Si no solicitaste este código, ignóralo.`,
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:2rem">
         <h2 style="color:#1a56db">Portal de Proveedores</h2>
         <p>Tu código de acceso es:</p>
         <div style="font-size:2.5rem;font-weight:700;letter-spacing:.3em;background:#f0f4ff;padding:1rem;border-radius:8px;text-align:center;color:#1a56db">${otp}</div>
-        <p style="color:#666;font-size:.88rem;margin-top:1rem">Válido durante ${Math.floor(OTP_TTL/60)} minutos. Si no solicitaste este código, ignora este mensaje.</p>
+        <p style="color:#666;font-size:.88rem;margin-top:1rem">
+          Válido durante ${Math.floor(OTP_TTL/60)} minutos.
+          Si no solicitaste este código, ignora este mensaje.
+        </p>
       </div>`
   });
 }
@@ -93,7 +102,7 @@ function generateOtp() {
 
 function createJWT(email, role) {
   return jwt.sign(
-    { sub: email, role, iat: Math.floor(Date.now()/1000) },
+    { sub: email, role, iat: Math.floor(Date.now() / 1000) },
     SECRET_KEY,
     { expiresIn: TOKEN_EXP * 60 }
   );
@@ -114,7 +123,9 @@ function getOrCreateUser(db, email) {
 }
 
 // ── Rutas ──────────────────────────────────────────────────────────────────────
-app.get('/health', (req, res) => res.json({ status: 'ok', service: 'auth' }));
+app.get('/health', (req, res) =>
+  res.json({ status: 'ok', service: 'auth' })
+);
 
 app.post('/auth/otp/request', async (req, res) => {
   const { email } = req.body;
@@ -149,7 +160,9 @@ app.post('/auth/otp/request', async (req, res) => {
 
 app.post('/auth/otp/verify', (req, res) => {
   const { email, otp } = req.body;
-  if (!email || !otp) return res.status(422).json({ detail: 'Email y código son obligatorios.' });
+  if (!email || !otp) {
+    return res.status(422).json({ detail: 'Email y código son obligatorios.' });
+  }
 
   const emailLower = email.toLowerCase().trim();
   const now        = Math.floor(Date.now() / 1000);
@@ -157,8 +170,12 @@ app.post('/auth/otp/verify', (req, res) => {
   const db     = loadDB();
   const record = db.otp_codes.find(o => o.email === emailLower && !o.used);
 
-  if (!record)               return res.status(400).json({ detail: 'No hay un código activo para este correo.' });
-  if (record.otp !== String(otp).trim()) return res.status(400).json({ detail: 'Código incorrecto.' });
+  if (!record) {
+    return res.status(400).json({ detail: 'No hay un código activo para este correo.' });
+  }
+  if (record.otp !== String(otp).trim()) {
+    return res.status(400).json({ detail: 'Código incorrecto.' });
+  }
   if (now > record.expires_at) {
     db.otp_codes = db.otp_codes.filter(o => o.email !== emailLower);
     saveDB(db);
@@ -170,12 +187,19 @@ app.post('/auth/otp/verify', (req, res) => {
   saveDB(db);
 
   const token = createJWT(emailLower, user.role);
-  res.json({ access_token: token, token_type: 'bearer', role: user.role, expires_in: TOKEN_EXP * 60 });
+  res.json({
+    access_token: token,
+    token_type:   'bearer',
+    role:         user.role,
+    expires_in:   TOKEN_EXP * 60
+  });
 });
 
-// ── Start ──────────────────────────────────────────────────────────────────────
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[auth] Servicio corriendo en puerto ${PORT}`);
-  const dir = path.dirname(DB_PATH);
-  fs.mkdirSync(dir, { recursive: true });
-});
+// ── Start / Export ─────────────────────────────────────────────────────────────
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () =>
+    console.log(`[auth] Puerto ${PORT}`)
+  );
+} else {
+  module.exports = app;
+}

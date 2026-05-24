@@ -21,17 +21,12 @@ const app  = express();
 const PORT = process.env.PORT || 8003;
 
 const SECRET_KEY  = process.env.JWT_SECRET   || 'cambia-este-secreto-en-produccion';
-const UPLOADS_DIR = process.env.UPLOADS_DIR  || '/data/uploads';
-const STATIC_DIR  = process.env.STATIC_DIR   || '/app/static';
+const DATA_PATH   = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
+const UPLOADS_DIR = process.env.UPLOADS_DIR  || path.join(DATA_PATH, 'uploads');
+const STATIC_DIR  = process.env.STATIC_DIR   || path.join(__dirname, '..', '..', 'static');
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'admin@tuempresa.com').split(',').map(e => e.trim().toLowerCase());
 const MAX_SIZE_MB  = parseInt(process.env.MAX_FILE_SIZE_MB || '10');
 
-// ── Middleware ──────────────────────────────────────────────────────────────
-app.use(cors());
-app.use(express.json());
-
-// Servir static (frontend)
-app.use('/static', express.static(STATIC_DIR));
 
 // ── Auth middleware ────────────────────────────────────────────────────────
 function authenticate(req, res, next) {
@@ -175,9 +170,19 @@ app.use((err, req, res, next) => {
   next();
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+// ── Start ──────────────────────────────────────────────────────────────────────
+if (require.main === module) {
+  // Modo standalone (arranque individual, útil en dev)
+  app.listen(PORT, '0.0.0.0', () => console.log(`[archivos] Puerto ${PORT}`));
+  app.use(cors());
+  app.use(express.json());
+  // Servir static (frontend)
+  app.use('/static', express.static(STATIC_DIR));
   console.log(`[archivos] Servicio corriendo en puerto ${PORT}`);
   console.log(`[archivos] Directorio uploads: ${UPLOADS_DIR}`);
   console.log(`[archivos] Static dir: ${STATIC_DIR}`);
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-});
+} else {
+  // Modo módulo: exportar solo el router
+  module.exports = app;
+}
