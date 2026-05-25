@@ -5,9 +5,12 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
+const { requireAuth, requireAdmin } = require('./static/js/auth');
+
 
 const app  = express();
 const PORT = process.env.PORT || 8000;
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@acme.com';
 
 app.use(cors());
 app.use(express.json());
@@ -32,18 +35,21 @@ app.use('/static', express.static(STATIC_DIR));
 
 // ── Rutas de páginas (render EJS) ────────────────────────────────────
 app.get('/', (req, res) => {
-  res.render('login-email', { title: 'Portal de Proveedores' });
+  res.render('login-email', {
+    title: 'Portal de Proveedores',
+    adminEmailContact: ADMIN_EMAIL
+  });
 });
 
 app.get('/login', (req, res) => {
   res.render('login-otp', { title: 'Portal electrónico - Login' });
 });
 
-app.get('/proveedores', (req, res) => {
+app.get('/proveedores', requireAuth, (req, res) => {
   res.render('admin-proveedores', { title: 'Portal electrónico - Administración' });
 });
 
-app.get('/perfil', (req, res) => {
+app.get('/perfil', requireAuth, (req, res) => {
   res.render('perfil', { title: 'Portal electrónico - Perfil de proveedores' });
 });
 

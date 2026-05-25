@@ -61,7 +61,7 @@ async function sendOtp(isResend = false) {
 
     // Navega a /login manteniendo next si lo hubiera
     const otpUrl = next ? `/login?next=${encodeURIComponent(next)}` : '/login';
-    window.location.href = otpUrl;
+    if (!isResend) window.location.href = otpUrl;
   } catch (e) {
     showToast(e.message, 'error');
   } finally {
@@ -82,7 +82,7 @@ function startOtpTimer() {
   let remaining = 300;
   const timerEl = document.getElementById('otpTimer');
   const resendEl = document.getElementById('resendBtn');
-  if (resendEl) resendEl.style.display = 'none';
+  //if (resendEl) resendEl.style.display = 'none';
 
   otpTimer = setInterval(() => {
     remaining--;

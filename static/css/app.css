@@ -105,3 +105,48 @@ a{color:inherit;text-decoration:none}
 #toast.show{opacity:1;transform:translateY(0)}
 #toast.toast-success{background:#166534}
 #toast.toast-error{background:var(--error)}
+
+/* ESTILOS PARA LAS PAGINAS */
+.form-read {
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: #f7f7f8;
+  border: 1px solid var(--divider);
+  font-size: .88rem;
+  color: var(--text);
+}
+
+.read-only-grid .form-group {
+  margin-bottom: .5rem;
+}
+
+.tabs {
+  display: flex;
+  gap: .5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--divider);
+}
+
+.tab {
+  border: none;
+  background: transparent;
+  padding: .5rem .9rem;
+  cursor: pointer;
+  font-size: .9rem;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.tab.active {
+  color: var(--text);
+  font-weight: 600;
+  border-bottom: 2px solid var(--blue);
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}

@@ -8,6 +8,8 @@
 
 'use strict';
 
+require('dotenv').config();
+
 const express    = require('express');
 const cors       = require('cors');
 const jwt        = require('jsonwebtoken');
@@ -28,31 +30,66 @@ const SMTP_PORT    = parseInt(process.env.SMTP_PORT || '587');
 const SMTP_USER    = process.env.SMTP_USER  || '';
 const SMTP_PASS    = process.env.SMTP_PASS  || '';
 const SMTP_FROM    = process.env.SMTP_FROM  || 'portal@tuempresa.com';
+const PORTAL_URL   = process.env.PORTAL_URL || `http://localhost:${PORT}`;
 const DATA_PATH    = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
 const DB_PATH      = process.env.AUTH_DB_PATH || path.join(DATA_PATH, 'auth.json');
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'admin@tuempresa.com')
                       .split(',').map(e => e.trim().toLowerCase());
+const ADMIN_EMAIL  = (process.env.ADMIN_EMAIL || ADMIN_EMAILS[0] || 'admin@tuempresa.com').trim().toLowerCase();
 
 // ── Middlewares globales ──────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
 
 // ── TinyDB-style JSON store ───────────────────────────────────────────────────
+function sanitizeAuthDB(db) {
+  db = db || {};
+  if (!Array.isArray(db.otp_codes)) db.otp_codes = [];
+  if (!Array.isArray(db.users)) db.users = [];
+  if (!Array.isArray(db.revoked_tokens)) db.revoked_tokens = [];
+  return db;
+}
+
 function loadDB() {
   try {
     if (!fs.existsSync(DB_PATH)) {
       const dir = path.dirname(DB_PATH);
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(DB_PATH, JSON.stringify({ otp_codes: [], users: [] }), 'utf8');
+      fs.writeFileSync(DB_PATH, JSON.stringify({ otp_codes: [], users: [], revoked_tokens: [] }), 'utf8');
     }
-    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+    return sanitizeAuthDB(JSON.parse(fs.readFileSync(DB_PATH, 'utf8')));
   } catch {
-    return { otp_codes: [], users: [] };
+    return sanitizeAuthDB({ otp_codes: [], users: [], revoked_tokens: [] });
   }
 }
 
 function saveDB(data) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
+  fs.writeFileSync(DB_PATH, JSON.stringify(sanitizeAuthDB(data), null, 2), 'utf8');
+}
+
+function isTokenRevoked(jti, db) {
+  if (!jti) return false;
+  const data = db || loadDB();
+  return Array.isArray(data.revoked_tokens) && data.revoked_tokens.some(item => item.jti === jti);
+}
+
+function revokeToken(token) {
+  const decoded = jwt.decode(token);
+  if (!decoded || !decoded.jti) return false;
+
+  const db = loadDB();
+  const now = Math.floor(Date.now() / 1000);
+  db.revoked_tokens = db.revoked_tokens.filter(item => item.expires_at > now);
+
+  if (!db.revoked_tokens.some(item => item.jti === decoded.jti)) {
+    db.revoked_tokens.push({
+      jti: decoded.jti,
+      revoked_at: now,
+      expires_at: decoded.exp || now + TOKEN_EXP * 60
+    });
+    saveDB(db);
+  }
+  return true;
 }
 
 // ── Mailer ─────────────────────────────────────────────────────────────────────
@@ -66,32 +103,80 @@ function getTransporter() {
   });
 }
 
+function buildOtpEmailText(otp) {
+  return `Portal de Proveedores\n\n` +
+         `Tu código de acceso es: ${otp}\n\n` +
+         `Válido durante ${Math.floor(OTP_TTL/60)} minutos.\n` +
+         `Si no solicitaste este código, ignóralo.\n\n` +
+         `Si necesitas ayuda, contacta a ${ADMIN_EMAIL}.`;
+}
+
+function buildOtpEmailHtml(otp) {
+  return `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:2rem">
+      <h2 style="color:#1a56db">Portal de Proveedores</h2>
+      <p>Tu código de acceso es:</p>
+      <div style="font-size:2.5rem;font-weight:700;letter-spacing:.3em;background:#f0f4ff;padding:1rem;border-radius:8px;text-align:center;color:#1a56db">${otp}</div>
+      <p style="color:#6b7280;font-size:.95rem;margin-top:1rem;line-height:1.5">
+        Válido durante ${Math.floor(OTP_TTL/60)} minutos.<br>
+        Si no solicitaste este código, ignora este mensaje.
+      </p>
+      <p style="color:#6b7280;font-size:.85rem;line-height:1.5;margin-top:1.5rem">
+        Si necesitas ayuda, contacta a <strong>${ADMIN_EMAIL}</strong>.
+      </p>
+    </div>`;
+}
+
+function buildInviteEmailText(email) {
+  return `Has sido invitado al Portal de Proveedores de Fundación Telefónica.\n\n` +
+         `Accede con este correo: ${email}\n` +
+         `Entra al portal aquí: ${PORTAL_URL}\n\n` +
+         `Si tienes algún problema, contacta a ${ADMIN_EMAIL}.`;
+}
+
+function buildInviteEmailHtml(email) {
+  return `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:2rem">
+      <h2 style="color:#1a56db">Invitación al Portal de Proveedores</h2>
+      <p>Has sido invitado a acceder al portal utilizando este correo:</p>
+      <p style="font-size:1rem;font-weight:600;color:#111827;word-break:break-word">${email}</p>
+      <p style="margin-top:1rem;color:#374151;line-height:1.6">
+        Haz clic en el siguiente enlace para iniciar sesión y gestionar tu perfil de proveedor:
+      </p>
+      <a href="${PORTAL_URL}" style="display:inline-block;margin-top:1rem;padding:.9rem 1.2rem;background:#1a56db;color:#fff;border-radius:.75rem;text-decoration:none">Abrir Portal</a>
+      <p style="color:#6b7280;font-size:.85rem;line-height:1.5;margin-top:1.5rem">
+        Si tienes algún problema, contacta a <strong>${ADMIN_EMAIL}</strong>.
+      </p>
+    </div>`;
+}
+
 async function sendOtpEmail(to, otp) {
   const transporter = getTransporter();
+  console.log(`[DEV] OTP para ${to}: ${otp}`);
   if (!transporter) {
-    console.log(`[DEV] OTP para ${to}: ${otp}`);
     return;
   }
   await transporter.sendMail({
     from: SMTP_FROM,
     to,
     subject: `Tu código de acceso: ${otp}`,
-    text: `Portal de Proveedores
+    text: buildOtpEmailText(otp),
+    html: buildOtpEmailHtml(otp)
+  });
+}
 
-Tu código de acceso es: ${otp}
-
-Válido durante ${Math.floor(OTP_TTL/60)} minutos.
-Si no solicitaste este código, ignóralo.`,
-    html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:2rem">
-        <h2 style="color:#1a56db">Portal de Proveedores</h2>
-        <p>Tu código de acceso es:</p>
-        <div style="font-size:2.5rem;font-weight:700;letter-spacing:.3em;background:#f0f4ff;padding:1rem;border-radius:8px;text-align:center;color:#1a56db">${otp}</div>
-        <p style="color:#666;font-size:.88rem;margin-top:1rem">
-          Válido durante ${Math.floor(OTP_TTL/60)} minutos.
-          Si no solicitaste este código, ignora este mensaje.
-        </p>
-      </div>`
+async function sendInviteEmail(to) {
+  const transporter = getTransporter();
+  console.log(`[DEV] Invitación para ${to}: ${PORTAL_URL}`);
+  if (!transporter) {
+    return;
+  }
+  await transporter.sendMail({
+    from: SMTP_FROM,
+    to,
+    subject: 'Invitación al Portal de Proveedores',
+    text: buildInviteEmailText(to),
+    html: buildInviteEmailHtml(to)
   });
 }
 
@@ -102,10 +187,17 @@ function generateOtp() {
 
 function createJWT(email, role) {
   return jwt.sign(
-    { sub: email, role, iat: Math.floor(Date.now() / 1000) },
+    { sub: email, role, iat: Math.floor(Date.now() / 1000), jti: crypto.randomUUID() },
     SECRET_KEY,
     { expiresIn: TOKEN_EXP * 60 }
   );
+}
+
+function isAuthorizedEmail(db, email) {
+  const emailLower = String(email || '').toLowerCase().trim();
+  if (!emailLower) return false;
+  if (ADMIN_EMAILS.includes(emailLower) || emailLower === ADMIN_EMAIL) return true;
+  return db.users.some(u => u.email === emailLower);
 }
 
 function getOrCreateUser(db, email) {
@@ -114,7 +206,7 @@ function getOrCreateUser(db, email) {
     user = {
       id:         crypto.randomUUID(),
       email,
-      role:       ADMIN_EMAILS.includes(email) ? 'admin' : 'supplier',
+      role:       ADMIN_EMAILS.includes(email) || email === ADMIN_EMAIL ? 'admin' : 'supplier',
       created_at: new Date().toISOString()
     };
     db.users.push(user);
@@ -122,10 +214,42 @@ function getOrCreateUser(db, email) {
   return user;
 }
 
+function authenticate(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return res.status(401).json({ detail: 'Token no proporcionado.' });
+  }
+  try {
+    const payload = jwt.verify(auth.slice(7), SECRET_KEY);
+    req.user = payload;
+    next();
+  } catch (e) {
+    return res.status(401).json({ detail: 'Token inválido o expirado.' });
+  }
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ detail: 'Acceso restringido a administradores.' });
+  }
+  next();
+}
+
 // ── Rutas ──────────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) =>
   res.json({ status: 'ok', service: 'auth' })
 );
+
+// Devuelve la info del token si es válido
+app.get('/auth/me', authenticate, (req, res) => {
+  // req.user viene del JWT: { sub, role, iat, jti, exp }
+  res.json({
+    email: req.user.sub,
+    role:  req.user.role,
+    iat:   req.user.iat,
+    exp:   req.user.exp
+  });
+});
 
 app.post('/auth/otp/request', async (req, res) => {
   const { email } = req.body;
@@ -134,10 +258,16 @@ app.post('/auth/otp/request', async (req, res) => {
   }
 
   const emailLower = email.toLowerCase().trim();
-  const otp        = generateOtp();
-  const now        = Math.floor(Date.now() / 1000);
-
   const db = loadDB();
+  if (!isAuthorizedEmail(db, emailLower)) {
+    return res.status(403).json({
+      detail: `No eres un usuario autorizado. Si crees que necesitas acceso, contacta a ${ADMIN_EMAIL}.`
+    });
+  }
+
+  const otp = generateOtp();
+  const now = Math.floor(Date.now() / 1000);
+
   // Eliminar OTPs anteriores del mismo email
   db.otp_codes = db.otp_codes.filter(o => o.email !== emailLower);
   db.otp_codes.push({
@@ -193,6 +323,55 @@ app.post('/auth/otp/verify', (req, res) => {
     role:         user.role,
     expires_in:   TOKEN_EXP * 60
   });
+});
+
+app.post('/auth/invite', authenticate, requireAdmin, async (req, res) => {
+  const { email } = req.body;
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(422).json({ detail: 'Email no válido.' });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+  const db = loadDB();
+  if (db.users.some(u => u.email === emailLower)) {
+    return res.status(409).json({ detail: 'Ese correo ya está registrado.' });
+  }
+
+  const user = {
+    id:         crypto.randomUUID(),
+    email:      emailLower,
+    role:       'supplier',
+    created_at: new Date().toISOString()
+  };
+  db.users.push(user);
+  saveDB(db);
+
+  try {
+    await sendInviteEmail(emailLower);
+    res.json({ message: 'Invitación enviada correctamente.' });
+  } catch (e) {
+    console.error('[SMTP]', e.message);
+    res.status(500).json({ detail: 'Error al enviar la invitación. Intenta de nuevo más tarde.' });
+  }
+});
+
+app.post('/auth/logout', (req, res) => {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return res.status(401).json({ detail: 'Token no proporcionado.' });
+  }
+
+  const token = auth.slice(7);
+  try {
+    const payload = jwt.verify(token, SECRET_KEY);
+    if (isTokenRevoked(payload.jti)) {
+      return res.json({ message: 'Sesión ya invalidada.' });
+    }
+    revokeToken(token);
+    return res.json({ message: 'Sesión cerrada correctamente.' });
+  } catch (e) {
+    return res.status(401).json({ detail: 'Token inválido o expirado.' });
+  }
 });
 
 // ── Start / Export ─────────────────────────────────────────────────────────────

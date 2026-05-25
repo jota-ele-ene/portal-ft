@@ -20,10 +20,11 @@ const mime       = require('mime-types');
 const app  = express();
 const PORT = process.env.PORT || 8003;
 
-const SECRET_KEY  = process.env.JWT_SECRET   || 'cambia-este-secreto-en-produccion';
-const DATA_PATH   = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
-const UPLOADS_DIR = process.env.UPLOADS_DIR  || path.join(DATA_PATH, 'uploads');
-const STATIC_DIR  = process.env.STATIC_DIR   || path.join(__dirname, '..', '..', 'static');
+const SECRET_KEY   = process.env.JWT_SECRET   || 'cambia-este-secreto-en-produccion';
+const DATA_PATH    = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
+const AUTH_DB_PATH = path.join(DATA_PATH, 'auth.json');
+const UPLOADS_DIR  = process.env.UPLOADS_DIR  || path.join(DATA_PATH, 'uploads');
+const STATIC_DIR   = process.env.STATIC_DIR   || path.join(__dirname, '..', '..', 'static');
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'admin@tuempresa.com').split(',').map(e => e.trim().toLowerCase());
 const MAX_SIZE_MB  = parseInt(process.env.MAX_FILE_SIZE_MB || '10');
 
@@ -35,7 +36,11 @@ function authenticate(req, res, next) {
     return res.status(401).json({ detail: 'Token no proporcionado.' });
   }
   try {
-    req.user = jwt.verify(auth.slice(7), SECRET_KEY);
+    const payload = jwt.verify(auth.slice(7), SECRET_KEY);
+    if (isTokenRevoked(payload.jti)) {
+      return res.status(401).json({ detail: 'Token inválido o expirado.' });
+    }
+    req.user = payload;
     next();
   } catch (e) {
     return res.status(401).json({ detail: 'Token inválido o expirado.' });
@@ -86,6 +91,21 @@ const upload = multer({
 
 function sanitizeEmail(email) {
   return (email || 'unknown').replace(/[^a-zA-Z0-9@._\-]/g, '_');
+}
+
+function loadAuthDB() {
+  try {
+    if (!fs.existsSync(AUTH_DB_PATH)) return { revoked_tokens: [] };
+    return JSON.parse(fs.readFileSync(AUTH_DB_PATH, 'utf8'));
+  } catch {
+    return { revoked_tokens: [] };
+  }
+}
+
+function isTokenRevoked(jti) {
+  if (!jti) return false;
+  const db = loadAuthDB();
+  return Array.isArray(db.revoked_tokens) && db.revoked_tokens.some(item => item.jti === jti);
 }
 
 // ── Rutas ──────────────────────────────────────────────────────────────────

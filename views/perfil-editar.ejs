@@ -1,0 +1,160 @@
+<%-
+  include('layout', {
+    title: 'Editar proveedor',
+    body: `
+  <section class="step active" id="step-edit">
+    <div class="card" style="margin-bottom:1.5rem">
+      <p style="font-size:.72rem;font-weight:700;color:var(--blue);letter-spacing:.07em;text-transform:uppercase;margin-bottom:.4rem">
+        Edición de proveedor
+      </p>
+      <h1 style="font-size:1.2rem;font-weight:700;color:var(--text)">
+        Editar datos de <%= proveedor.razon_social %>
+      </h1>
+      <p style="color:var(--text-muted);font-size:.88rem;margin-top:.35rem">
+        Modifica los datos en las distintas pestañas y guarda los cambios.
+      </p>
+    </div>
+
+    <!-- Pestañas -->
+    <div class="tabs">
+      <button type="button" class="tab active" data-tab="tab-fiscal">Datos fiscales</button>
+      <button type="button" class="tab" data-tab="tab-contacto">Contacto</button>
+      <button type="button" class="tab" data-tab="tab-bancario">Cuenta bancaria</button>
+      <button type="button" class="tab" data-tab="tab-docs">Documentación</button>
+    </div>
+
+    <form id="supplierForm" novalidate action="/perfil/editar/<%= proveedor.id %>" method="post" enctype="multipart/form-data">
+      <!-- TAB 1: FISCAL -->
+      <div class="card tab-panel active" id="tab-fiscal">
+        <div class="form-section">Datos fiscales</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="razon_social">Razón social <span style="color:var(--error)">*</span></label>
+            <input class="form-control" type="text" id="razon_social" name="razon_social" value="<%= proveedor.razon_social || '' %>" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="nombre_comercial">Nombre comercial</label>
+            <input class="form-control" type="text" id="nombre_comercial" name="nombre_comercial" value="<%= proveedor.nombre_comercial || '' %>">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="nif">NIF / CIF <span style="color:var(--error)">*</span></label>
+            <input class="form-control" type="text" id="nif" name="nif" value="<%= proveedor.nif || '' %>" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="actividad">Actividad económica</label>
+            <input class="form-control" type="text" id="actividad" name="actividad" value="<%= proveedor.actividad || '' %>">
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label" for="direccion">Dirección fiscal <span style="color:var(--error)">*</span></label>
+            <input class="form-control" type="text" id="direccion" name="direccion" value="<%= proveedor.direccion || '' %>" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="codigo_postal">Código postal</label>
+            <input class="form-control" type="text" id="codigo_postal" name="codigo_postal" value="<%= proveedor.codigo_postal || '' %>">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="ciudad">Ciudad</label>
+            <input class="form-control" type="text" id="ciudad" name="ciudad" value="<%= proveedor.ciudad || '' %>">
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: CONTACTO -->
+      <div class="card tab-panel" id="tab-contacto">
+        <div class="form-section">Datos de contacto</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="persona_contacto">Persona de contacto <span style="color:var(--error)">*</span></label>
+            <input class="form-control" type="text" id="persona_contacto" name="persona_contacto" value="<%= proveedor.persona_contacto || '' %>" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="email_contacto">Email de contacto <span style="color:var(--error)">*</span></label>
+            <input class="form-control" type="email" id="email_contacto" name="email_contacto" value="<%= proveedor.email_contacto || '' %>" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="telefono">Teléfono</label>
+            <input class="form-control" type="tel" id="telefono" name="telefono" value="<%= proveedor.telefono || '' %>">
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: BANCARIO -->
+      <div class="card tab-panel" id="tab-bancario">
+        <div class="form-section">Datos bancarios</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="iban">IBAN <span style="color:var(--error)">*</span></label>
+            <input class="form-control" type="text" id="iban" name="iban" value="<%= proveedor.iban || '' %>" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="banco">Entidad bancaria</label>
+            <input class="form-control" type="text" id="banco" name="banco" value="<%= proveedor.banco || '' %>">
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: DOCUMENTACIÓN -->
+      <div class="card tab-panel" id="tab-docs">
+        <div class="form-section">Documentación adjunta</div>
+        <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">
+          Sube CIF/NIF, certificados AEAT y Seguridad Social u otros documentos requeridos.
+        </p>
+
+        <!-- Documentos existentes -->
+        <% if (proveedor.documentos && proveedor.documentos.length) { %>
+          <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.5rem">Documentos ya subidos</h3>
+          <ul style="list-style:none;padding:0;margin:0 0 1rem 0;display:flex;flex-direction:column;gap:.5rem">
+            <% proveedor.documentos.forEach(function (doc) { %>
+              <li style="display:flex;justify-content:space-between;align-items:center;border:1px solid var(--divider);border-radius:var(--radius-sm);padding:.5rem .75rem">
+                <div>
+                  <div style="font-size:.9rem;font-weight:500;color:var(--text)">
+                    <%= doc.nombre_original %>
+                  </div>
+                  <div style="font-size:.8rem;color:var(--text-faint)">
+                    <%= doc.tipo || 'Documento' %> · <%= doc.size_humano || '' %>
+                  </div>
+                </div>
+                <div style="display:flex;gap:.5rem;align-items:center">
+                  <a href="/ficheros/<%= proveedor.id %>/<%= doc.nombre_fichero %>" class="btn btn-link" target="_blank">
+                    Ver
+                  </a>
+                  <label style="font-size:.75rem;color:var(--text-faint);display:flex;align-items:center;gap:.25rem">
+                    <input type="checkbox" name="eliminar_docs[]" value="<%= doc.id %>">
+                    Eliminar
+                  </label>
+                </div>
+              </li>
+            <% }) %>
+          </ul>
+        <% } %>
+
+        <!-- Nuevos ficheros -->
+        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+          <input type="file" id="fileInput" name="nuevos_ficheros[]" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" stroke-width="1.5" style="margin:0 auto .75rem">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <p style="font-size:.88rem;color:var(--text-muted)">
+            Arrastra aquí los ficheros o <strong style="color:var(--blue)">haz clic para seleccionar</strong>
+          </p>
+          <p style="font-size:.75rem;color:var(--text-faint);margin-top:.35rem">
+            PDF, JPG, PNG, DOC, DOCX · máx. 10 MB por fichero
+          </p>
+        </div>
+      </div>
+
+      <!-- Acciones globales -->
+      <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--divider);display:flex;gap:.75rem;flex-wrap:wrap">
+        <a href="/perfil/<%= proveedor.id %>" class="btn btn-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary">
+          Guardar cambios
+        </button>
+      </div>
+    </form>
+  </section>
+  `,
+  scripts: ['/static/js/supplier-form.js']
+  })
+%>

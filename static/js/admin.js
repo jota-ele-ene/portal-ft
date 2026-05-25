@@ -1,7 +1,7 @@
 window.APP_BASE = window.APP_BASE || window.location.pathname.replace(/\/[^/]*$/, '');
 window.API = window.API || (window.__API_BASE__ || window.APP_BASE).replace(/\/$/, '');
 
-let adminToken = window.token || null;
+let adminToken = window.token || sessionStorage.getItem('portal_token') || null;
 let allSuppliers = [];
 let adminEmailLocal = '';
 
@@ -14,6 +14,79 @@ function showToast(msg, type = '') {
   t.className = 'show' + (type ? ' toast-' + type : '');
   clearTimeout(window._tt);
   window._tt = setTimeout(() => (t.className = ''), 4000);
+}
+
+function openAddInviteModal() {
+  const modal = document.getElementById('inviteModal');
+  const options = document.getElementById('inviteOptionScreen');
+  const form = document.getElementById('inviteFormScreen');
+  const error = document.getElementById('inviteError');
+  const success = document.getElementById('inviteSuccess');
+  const input = document.getElementById('inviteEmailInput');
+  if (!modal || !options || !form) return;
+  modal.style.display = 'flex';
+  options.style.display = 'block';
+  form.style.display = 'none';
+  if (error) error.style.display = 'none';
+  if (success) success.style.display = 'none';
+  if (input) input.value = '';
+}
+
+function closeInviteModal() {
+  const modal = document.getElementById('inviteModal');
+  if (!modal) return;
+  modal.style.display = 'none';
+}
+
+function showInviteForm() {
+  const options = document.getElementById('inviteOptionScreen');
+  const form = document.getElementById('inviteFormScreen');
+  const error = document.getElementById('inviteError');
+  const success = document.getElementById('inviteSuccess');
+  if (!options || !form) return;
+  options.style.display = 'none';
+  form.style.display = 'block';
+  if (error) error.style.display = 'none';
+  if (success) success.style.display = 'none';
+}
+
+async function inviteSupplier() {
+  const emailInput = document.getElementById('inviteEmailInput');
+  const error = document.getElementById('inviteError');
+  const success = document.getElementById('inviteSuccess');
+  if (!emailInput || !error || !success) return;
+
+  const email = emailInput.value.trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    error.textContent = 'Introduce un correo válido.';
+    error.style.display = 'block';
+    success.style.display = 'none';
+    return;
+  }
+
+  error.style.display = 'none';
+  success.style.display = 'none';
+
+  try {
+    const res = await fetch(`${API}/auth/invite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + adminToken
+      },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Error al enviar la invitación.');
+
+    success.textContent = 'Invitación enviada correctamente.';
+    success.style.display = 'block';
+    emailInput.value = '';
+  } catch (e) {
+    error.textContent = e.message;
+    error.style.display = 'block';
+    success.style.display = 'none';
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

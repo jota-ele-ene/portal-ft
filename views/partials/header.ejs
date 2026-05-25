@@ -9,5 +9,44 @@
       <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"></path>
     </svg>
     <span id="headerEmail"></span>
+    <button id="headerLogout" class="header-logout" type="button" style="margin-left:1rem;display:none;">Cerrar sesión</button>
   </div>
 </header>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const headerUser = document.getElementById('headerUser');
+    const headerEmail = document.getElementById('headerEmail');
+    const headerLogout = document.getElementById('headerLogout');
+    const token = sessionStorage.getItem('portal_token');
+    const email = sessionStorage.getItem('portal_email');
+
+    if (token && email) {
+      if (headerUser) headerUser.style.display = 'flex';
+      if (headerEmail) headerEmail.textContent = email;
+      if (headerLogout) headerLogout.style.display = 'inline-flex';
+    }
+
+    const apiBase = window.API || (window.__API_BASE__ || window.location.pathname.replace(/\/[^/]*$/, '')).replace(/\/$/, '');
+    if (headerLogout) {
+      headerLogout.addEventListener('click', async () => {
+        if (token) {
+          try {
+            await fetch(`${apiBase}/auth/logout`, {
+              method: 'POST',
+              headers: { Authorization: 'Bearer ' + token }
+            });
+          } catch (e) {
+            console.warn('Logout backend failed:', e);
+          }
+        }
+
+        sessionStorage.removeItem('portal_token');
+        sessionStorage.removeItem('portal_role');
+        sessionStorage.removeItem('portal_email');
+        sessionStorage.removeItem('portal_next');
+        window.token = null;
+        window.location.href = '/';
+      });
+    }
+  });
+</script>

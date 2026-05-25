@@ -15,7 +15,11 @@
   <%- include('partials/header') %>
 
   <main class="page-main">
-    <%- body %>
+    <% if (typeof body !== 'undefined') { %>
+      <%- body %>
+    <% } else { %>
+      <%- includeMain && includeMain() %>
+    <% } %>
   </main>
 
   <%- include('partials/footer') %>

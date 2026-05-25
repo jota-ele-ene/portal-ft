@@ -18,6 +18,7 @@
           <option value="rechazado">Rechazado</option>
         </select>
         <button class="btn btn-secondary btn-sm" onclick="loadSuppliers()">⟳ Actualizar</button>
+        <button class="btn btn-primary btn-sm" onclick="openAddInviteModal()">+ Añadir proveedor</button>
       </div>
     </div>
     <div class="table-wrapper">
@@ -37,7 +38,34 @@
         </tbody>
       </table>
     </div>
-  </section>`,
+  </section>
+  <div id="inviteModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.65);backdrop-filter:blur(2px);align-items:center;justify-content:center;z-index:999;padding:1rem;">
+    <div style="width:min(100%,560px);background:var(--surface);border-radius:1rem;padding:1.5rem;box-shadow:0 22px 60px rgba(15,23,42,.28);position:relative;">
+      <button type="button" onclick="closeInviteModal()" style="position:absolute;top:1rem;right:1rem;border:none;background:none;color:var(--text);font-size:1.25rem;cursor:pointer">×</button>
+      <div id="inviteOptionScreen">
+        <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:1rem">Añadir proveedor</h2>
+        <p style="color:var(--text-muted);margin-bottom:1.5rem">Elige si quieres añadir un nuevo proveedor o invitarle por correo al portal.</p>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap">
+          <button class="btn btn-secondary" onclick="window.location.href='/perfil'">Añadir proveedor</button>
+          <button class="btn btn-primary" onclick="showInviteForm()">Invitar proveedor</button>
+        </div>
+      </div>
+      <div id="inviteFormScreen" style="display:none;margin-top:1.25rem;">
+        <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:1rem">Invitar proveedor</h2>
+        <div class="form-group">
+          <label class="form-label" for="inviteEmailInput">Correo electrónico del proveedor</label>
+          <input class="form-control" type="email" id="inviteEmailInput" placeholder="proveedor@empresa.com" autocomplete="email">
+          <p class="field-error" id="inviteError" style="display:none"></p>
+          <p id="inviteSuccess" style="display:none;color:var(--success);font-size:.9rem;margin-top:.75rem"></p>
+        </div>
+        <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin-top:1rem;">
+          <button class="btn btn-primary" onclick="inviteSupplier()">Invitar</button>
+          <button class="btn btn-secondary" onclick="openAddInviteModal()">Volver</button>
+        </div>
+      </div>
+    </div>
+  </div>
+`,
     scripts: ['/static/js/admin.js']
   })
 %>

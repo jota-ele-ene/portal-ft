@@ -20,8 +20,9 @@ const crypto  = require('crypto');
 const app  = express();
 const PORT = process.env.PORT || 8002;
 
-const SECRET_KEY = process.env.JWT_SECRET       || 'cambia-este-secreto-en-produccion';
+const SECRET_KEY   = process.env.JWT_SECRET       || 'cambia-este-secreto-en-produccion';
 const DATA_PATH    = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
+const AUTH_DB_PATH = path.join(DATA_PATH, 'auth.json');
 const DB_PATH      = process.env.GESTION_DB_PATH || path.join(DATA_PATH, 'suppliers.json');
 
 // ── JSON store ─────────────────────────────────────────────────────────────────
@@ -48,7 +49,11 @@ function authenticate(req, res, next) {
     return res.status(401).json({ detail: 'Token no proporcionado.' });
   }
   try {
-    req.user = jwt.verify(auth.slice(7), SECRET_KEY);
+    const payload = jwt.verify(auth.slice(7), SECRET_KEY);
+    if (isTokenRevoked(payload.jti)) {
+      return res.status(401).json({ detail: 'Token inválido o expirado.' });
+    }
+    req.user = payload;
     next();
   } catch {
     res.status(401).json({ detail: 'Token inválido o expirado.' });
@@ -80,6 +85,21 @@ function getOrCreate(db, email) {
 
 function hasMinimum(s) {
   return s.razon_social && s.nif && s.persona_contacto && s.iban;
+}
+
+function loadAuthDB() {
+  try {
+    if (!fs.existsSync(AUTH_DB_PATH)) return { revoked_tokens: [] };
+    return JSON.parse(fs.readFileSync(AUTH_DB_PATH, 'utf8'));
+  } catch {
+    return { revoked_tokens: [] };
+  }
+}
+
+function isTokenRevoked(jti) {
+  if (!jti) return false;
+  const db = loadAuthDB();
+  return Array.isArray(db.revoked_tokens) && db.revoked_tokens.some(item => item.jti === jti);
 }
 
 const ALLOWED_FIELDS = [

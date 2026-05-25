@@ -11,8 +11,7 @@
         </svg>
       </div>
       <h2 style="font-size:1.25rem;font-weight:700;color:var(--text);margin-bottom:.5rem">Introduce tu código</h2>
-      <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:.25rem">Código de 6 dígitos enviado a</p>
-      <p style="font-weight:600;color:var(--blue);font-size:.9rem;margin-bottom:1.5rem" id="otpEmailDisplay"></p>
+      <p><span id="code-send-text" style="color:var(--text-muted);font-size:.88rem;margin-bottom:.25rem">Código de 6 dígitos enviado a</span> <span style="font-weight:600;color:var(--blue);font-size:.9rem;margin-bottom:1.5rem" id="otpEmailDisplay"></span>
       <div class="otp-inputs" id="step-otp-inputs">
         <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
         <input class="otp-digit" type="text" maxlength="1" inputmode="numeric">
@@ -24,7 +23,7 @@
       <p class="field-error" id="otpError" style="display:none;text-align:center"></p>
       <button class="btn btn-primary btn-lg" id="verifyOtpBtn" onclick="verifyOtp()">Verificar código</button>
       <p style="font-size:.75rem;color:var(--text-faint);margin-top:1rem" id="otpTimer"></p>
-      <button class="btn btn-secondary btn-sm" id="resendBtn" onclick="sendOtp(true)" style="display:none;margin-top:.5rem">Reenviar código</button>
+      <button class="btn btn-secondary btn-sm" id="resendBtn" onclick="sendOtp(true)" style="margin-top:.5rem">Reenviar código</button>
     </div>
   </section>
     `,

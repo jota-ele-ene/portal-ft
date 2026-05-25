@@ -2,6 +2,14 @@ window.APP_BASE = window.APP_BASE || window.location.pathname.replace(/\/[^/]*$/
 window.API = window.API || (window.__API_BASE__ || window.APP_BASE).replace(/\/$/, '');
 const pendingFiles = [];
 
+// Recuperar token desde sessionStorage
+window.token = window.token || sessionStorage.getItem('portal_token') || null;
+
+// Si no hay token, redirigir a login
+if (!window.token) {
+  window.location.href = '/';
+}
+
 window.loadSupplierData = async function() {
   if (!window.token) return;
   try {
@@ -33,7 +41,30 @@ function setBadge(id, status) {
 
 async function saveDraft() { await saveSupplierData(false); }
 
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.className = 'show' + (type ? ' toast-' + type : '');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => (t.className = ''), 4000);
+}
+
+function showStep(stepId) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  const step = document.getElementById(stepId);
+  if (step) step.classList.add('active');
+}
+
+function goToForm() {
+  showStep('step-form');
+  loadSupplierData();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  // Cargar datos guardados del proveedor
+  loadSupplierData();
+  
   const form = document.getElementById('supplierForm');
   if (form) form.addEventListener('submit', async e => { e.preventDefault(); await saveSupplierData(true); });
   const zone = document.getElementById('uploadZone');
@@ -96,3 +127,20 @@ async function uploadPendingFiles() {
   pendingFiles.length = 0;
   setBadge('statusDocs', 'aprobado');
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const tabs = document.querySelectorAll('.tabs .tab');
+  const panels = document.querySelectorAll('.tab-panel');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.getAttribute('data-tab');
+
+      tabs.forEach(t => t.classList.remove('active'));
+      panels.forEach(p => p.classList.remove('active'));
+
+      tab.classList.add('active');
+      document.getElementById(target).classList.add('active');
+    });
+  });
+});
