@@ -127,6 +127,17 @@ app.put('/suppliers/me', authenticate, (req, res) => {
 
   const updates = {};
   ALLOWED_FIELDS.forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
+
+  if (Array.isArray(req.body.documents)) {
+    updates.documents = req.body.documents.map(doc => ({
+      filename: doc.filename,
+      original: doc.original || doc.filename,
+      type: doc.type || 'Documento',
+      label: doc.label || doc.type || doc.filename,
+      uploaded_at: doc.uploaded_at || new Date().toISOString()
+    }));
+  }
+
   updates.updated_at = new Date().toISOString();
 
   if (s) {

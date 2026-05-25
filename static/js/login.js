@@ -202,14 +202,27 @@ async function verifyOtp() {
     if (headerUser) headerUser.style.display = 'flex';
     if (headerEmail) headerEmail.textContent = currentEmail;
 
-    const storedNext = sessionStorage.getItem('portal_next') || '';
+    const storedNext = sessionStorage.getItem('portal_next') || getQueryParam('next') || '';
     const role = data.role || 'supplier';
 
-    let target;
+    let target = '';
+    // Si el next apunta a /proveedores pero el rol no es admin, ignora el next
     if (storedNext) {
-      target = storedNext;
+      if ((storedNext.startsWith('/proveedores') || storedNext.includes('/proveedores')) && role !== 'admin') {
+        target = '/perfil';
+      } else {
+        target = storedNext;
+      }
+      sessionStorage.removeItem('portal_next');
     } else {
       target = role === 'admin' ? '/proveedores' : '/perfil';
+    }
+
+    // Limpia el parámetro next de la URL tras login
+    if (window.history && window.history.replaceState) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('next');
+      window.history.replaceState({}, document.title, url.pathname);
     }
 
     window.location.href = target;

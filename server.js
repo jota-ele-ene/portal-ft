@@ -11,9 +11,11 @@ const { requireAuth, requireAdmin } = require('./static/js/auth');
 const app  = express();
 const PORT = process.env.PORT || 8000;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@acme.com';
+const MAX_SIZE_MB = parseInt(process.env.MAX_FILE_SIZE_MB || '10');
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: `${MAX_SIZE_MB * 2}mb` }));
+app.use(express.urlencoded({ limit: `${MAX_SIZE_MB * 2}mb`, extended: true }));
 
 // ── Configuración de vistas (EJS) ─────────────────────────────────────
 app.set('views', path.join(__dirname, 'views')); // carpeta views/
@@ -28,10 +30,19 @@ app.use(authService);
 app.use(gestionService);
 app.use(archivosService);
 
+// `requireAuth` is provided by the auth helper imported above; server-side rendering keeps pages simple.
+
 // ── Frontend estático ────────────────────────────────────────────────
 const STATIC_DIR = process.env.STATIC_DIR || path.join(__dirname, 'static');
 
 app.use('/static', express.static(STATIC_DIR));
+
+// Wrapper: if Authorization header is present, enforce `requireAuth`; otherwise allow render
+function requireAuthIfHeader(req, res, next) {
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ')) return next();
+  return requireAuth(req, res, next);
+}
 
 // ── Rutas de páginas (render EJS) ────────────────────────────────────
 app.get('/', (req, res) => {
@@ -46,10 +57,21 @@ app.get('/login', (req, res) => {
 });
 
 app.get('/proveedores', requireAuth, (req, res) => {
+  console.log('/proveedores - Usuario:', req.user);
+  console.log('/proveedores - Token:', req.token);
   res.render('admin-proveedores', { title: 'Portal electrónico - Administración' });
 });
 
+// Edit view for profile
+app.get('/perfil-edit', requireAuth, (req, res) => {
+  console.log('/perfil-edit - Usuario:', req.user);
+  console.log('/perfil-edit - Token:', req.token);
+  res.render('perfil-edit', { title: 'Portal electrónico - Editar perfil' });
+});
+
 app.get('/perfil', requireAuth, (req, res) => {
+  console.log('/perfil - Usuario:', req.user);
+  console.log('/perfil - Token:', req.token);
   res.render('perfil', { title: 'Portal electrónico - Perfil de proveedores' });
 });
 

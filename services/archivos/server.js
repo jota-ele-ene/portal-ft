@@ -121,6 +121,8 @@ app.post('/documents/upload', authenticate, upload.single('file'), (req, res) =>
     filename:  req.file.filename,
     original:  req.file.originalname,
     size:      req.file.size,
+    type:      req.body.document_type || 'Documento',
+    label:     req.body.document_label || req.body.document_type || req.file.originalname,
     path:      `uploads/${emailSlug}/${req.file.filename}`,
     uploaded_at: new Date().toISOString()
   });
@@ -162,6 +164,15 @@ app.get('/documents/admin/list/:email', authenticate, requireAdmin, (req, res) =
   res.json({ files, email: req.params.email });
 });
 
+// Proveedor: descargar su propio archivo
+app.get('/documents/download/:filename', authenticate, (req, res) => {
+  const emailSlug = sanitizeEmail(req.user.sub);
+  const filename  = path.basename(req.params.filename);
+  const filePath  = path.join(UPLOADS_DIR, emailSlug, filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ detail: 'Archivo no encontrado.' });
+  res.download(filePath, filename);
+});
+
 // Admin: descargar archivo
 app.get('/documents/download/:email/:filename', authenticate, requireAdmin, (req, res) => {
   const emailSlug = sanitizeEmail(req.params.email);
@@ -169,6 +180,16 @@ app.get('/documents/download/:email/:filename', authenticate, requireAdmin, (req
   const filePath  = path.join(UPLOADS_DIR, emailSlug, filename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ detail: 'Archivo no encontrado.' });
   res.download(filePath, filename);
+});
+
+// Proveedor: eliminar su propio archivo
+app.delete('/documents/:filename', authenticate, (req, res) => {
+  const emailSlug = sanitizeEmail(req.user.sub);
+  const filename  = path.basename(req.params.filename);
+  const filePath  = path.join(UPLOADS_DIR, emailSlug, filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ detail: 'Archivo no encontrado.' });
+  fs.unlinkSync(filePath);
+  res.json({ message: 'Archivo eliminado.' });
 });
 
 // Admin: eliminar archivo
@@ -193,11 +214,12 @@ app.use((err, req, res, next) => {
 // ── Start ──────────────────────────────────────────────────────────────────────
 if (require.main === module) {
   // Modo standalone (arranque individual, útil en dev)
-  app.listen(PORT, '0.0.0.0', () => console.log(`[archivos] Puerto ${PORT}`));
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: `${MAX_SIZE_MB * 2}mb` }));
+  app.use(express.urlencoded({ limit: `${MAX_SIZE_MB * 2}mb`, extended: true }));
   // Servir static (frontend)
   app.use('/static', express.static(STATIC_DIR));
+  app.listen(PORT, '0.0.0.0', () => console.log(`[archivos] Puerto ${PORT}`));
   console.log(`[archivos] Servicio corriendo en puerto ${PORT}`);
   console.log(`[archivos] Directorio uploads: ${UPLOADS_DIR}`);
   console.log(`[archivos] Static dir: ${STATIC_DIR}`);
