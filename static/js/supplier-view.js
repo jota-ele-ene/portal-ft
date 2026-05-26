@@ -1,5 +1,7 @@
 (function(){
-  const API = window.API || (window.APP_BASE || '').replace(/\/$/, '');
+  // Siempre usar rutas absolutas desde la raíz para evitar que /perfil/:id
+  // corrompa la base de la API (e.g. window.APP_BASE daría '/perfil' en vez de '')
+  const API = window.__API_BASE__ || '';
   const token = sessionStorage.getItem('portal_token') || window.token || null;
   // SUPPLIER_ID se inyecta desde la vista EJS cuando el admin visualiza un proveedor concreto
   const supplierId = window.SUPPLIER_ID || null;
@@ -12,8 +14,8 @@
   // Devuelve la URL de API correcta según si somos admin viendo otro proveedor o el propio
   function profileUrl() {
     return supplierId
-      ? `${API}/suppliers/admin/${supplierId}`
-      : `${API}/suppliers/me`;
+      ? `/suppliers/admin/${supplierId}`
+      : `/suppliers/me`;
   }
 
   async function fetchProfile() {
@@ -70,7 +72,7 @@
   async function openDocument(filename) {
     if (!filename) return;
     try {
-      const res = await fetch(`${API}/documents/download/${filename}`, {
+      const res = await fetch(`/documents/download/${filename}`, {
         headers: { 'Authorization': 'Bearer ' + token }
       });
       if (!res.ok) {
@@ -88,14 +90,13 @@
   }
 
   window.openDocument = openDocument;
-
   window.downloadDocument = downloadDocument;
   window.deleteDocument = deleteDocument;
 
   async function downloadDocument(filename) {
     if (!filename) return;
     try {
-      const res = await fetch(`${API}/documents/download/${filename}`, {
+      const res = await fetch(`/documents/download/${filename}`, {
         headers: { 'Authorization': 'Bearer ' + token }
       });
       if (!res.ok) {
@@ -121,7 +122,7 @@
     if (!filename) return;
     if (!confirm('¿Eliminar este documento?')) return;
     try {
-      const res = await fetch(`${API}/documents/${filename}`, {
+      const res = await fetch(`/documents/${filename}`, {
         method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token }
       });
       if (!res.ok) {

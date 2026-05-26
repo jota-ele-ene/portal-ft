@@ -1,5 +1,8 @@
-window.APP_BASE = window.APP_BASE || window.location.pathname.replace(/\/[^/]*$/, '');
-window.API = window.API || (window.__API_BASE__ || window.APP_BASE).replace(/\/$/, '');
+// Calcular la base de la API correctamente aunque la URL sea /perfil-edit/:id o /perfil/:id
+// En esos casos window.location.pathname sería /perfil-edit/<uuid> y el replace devolvería
+// '/perfil-edit', que es incorrecto. Siempre usamos la raíz '/'.
+window.APP_BASE = '';
+window.API = window.__API_BASE__ || '';
 window.token = window.token || sessionStorage.getItem('portal_token') || null;
 
 // SUPPLIER_ID se inyecta desde la vista EJS cuando el admin edita un proveedor concreto
@@ -14,8 +17,8 @@ if (!window.token) {
 // Devuelve la URL de API correcta según si somos admin editando otro proveedor o el propio
 function profileUrl() {
   return supplierId
-    ? `${window.API}/suppliers/admin/${supplierId}`
-    : `${window.API}/suppliers/me`;
+    ? `/suppliers/admin/${supplierId}`
+    : `/suppliers/me`;
 }
 
 // URL a la que navegar al cancelar
@@ -53,8 +56,6 @@ function renderUploadedDocs(documents) {
 
   const rows = documents.map(doc => {
     const label = doc.label || doc.type || doc.original || doc.filename;
-    const type = doc.type || 'Documento';
-    const uploaded = doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString('es-ES', { year:'numeric', month:'short', day:'numeric' }) : '';
     return `
       <div class="doc-row">
         <button type="button" class="doc-link" onclick="openDocument('${encodeURIComponent(doc.filename)}')">${label}</button>
@@ -79,7 +80,7 @@ function renderUploadedDocs(documents) {
 async function openDocument(filename) {
   if (!filename || !window.token) return;
   try {
-    const res = await fetch(`${window.API}/documents/download/${filename}`, {
+    const res = await fetch(`/documents/download/${filename}`, {
       headers: { 'Authorization': 'Bearer ' + window.token }
     });
     if (!res.ok) {
@@ -228,7 +229,7 @@ async function submitDocumentUpload() {
   form.append('document_label', (typeEl.value === 'Otro' ? labelEl.value.trim() : typeEl.value));
 
   try {
-    const res = await fetch(`${window.API}/documents/upload`, {
+    const res = await fetch(`/documents/upload`, {
       method: 'POST', headers: { 'Authorization': 'Bearer ' + window.token }, body: form
     });
     if (!res.ok) {
@@ -278,7 +279,7 @@ function handleFiles(files) {
 async function downloadDocument(filename) {
   if (!filename || !window.token) return;
   try {
-    const res = await fetch(`${window.API}/documents/download/${filename}`, {
+    const res = await fetch(`/documents/download/${filename}`, {
       headers: { 'Authorization': 'Bearer ' + window.token }
     });
     if (!res.ok) {
@@ -304,7 +305,7 @@ async function deleteDocument(filename) {
   if (!filename || !window.token) return;
   if (!confirm('¿Eliminar este documento?')) return;
   try {
-    const res = await fetch(`${window.API}/documents/${filename}`, {
+    const res = await fetch(`/documents/${filename}`, {
       method: 'DELETE',
       headers: { 'Authorization': 'Bearer ' + window.token }
     });
