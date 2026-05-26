@@ -49,12 +49,28 @@ app.get('/proveedores', (req, res) => {
   res.render('admin-proveedores', { title: 'Portal electrónico - Administración' });
 });
 
+// Rutas sin parámetro: uso propio del proveedor autenticado
 app.get('/perfil-edit', (req, res) => {
-  res.render('perfil-edit', { title: 'Portal electrónico - Editar perfil' });
+  res.render('perfil-edit', { title: 'Portal electrónico - Editar perfil', supplierId: null });
 });
 
 app.get('/perfil', (req, res) => {
-  res.render('perfil', { title: 'Portal electrónico - Perfil de proveedores' });
+  res.render('perfil', { title: 'Portal electrónico - Perfil de proveedores', supplierId: null });
+});
+
+// Rutas con :id → el administrador ve/edita el perfil de un proveedor concreto
+app.get('/perfil/:id', (req, res) => {
+  res.render('perfil', {
+    title: 'Portal electrónico - Perfil de proveedor',
+    supplierId: req.params.id
+  });
+});
+
+app.get('/perfil-edit/:id', (req, res) => {
+  res.render('perfil-edit', {
+    title: 'Portal electrónico - Editar proveedor',
+    supplierId: req.params.id
+  });
 });
 
 // Health global

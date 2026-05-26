@@ -1,21 +1,31 @@
 (function(){
   const API = window.API || (window.APP_BASE || '').replace(/\/$/, '');
   const token = sessionStorage.getItem('portal_token') || window.token || null;
+  // SUPPLIER_ID se inyecta desde la vista EJS cuando el admin visualiza un proveedor concreto
+  const supplierId = window.SUPPLIER_ID || null;
   let currentProfile = { documents: [] };
+
   if (!token) {
     window.location.href = '/';
   }
 
+  // Devuelve la URL de API correcta según si somos admin viendo otro proveedor o el propio
+  function profileUrl() {
+    return supplierId
+      ? `${API}/suppliers/admin/${supplierId}`
+      : `${API}/suppliers/me`;
+  }
+
   async function fetchProfile() {
     try {
-      const res = await fetch(`${API}/suppliers/me`, { headers: { 'Authorization': 'Bearer ' + token } });
+      const res = await fetch(profileUrl(), { headers: { 'Authorization': 'Bearer ' + token } });
       if (!res.ok) {
-        window.location.href = '/perfil-edit';
+        window.location.href = supplierId ? '/proveedores' : '/perfil-edit';
         return;
       }
       const data = await res.json();
       currentProfile = data || { documents: [] };
-      if (!data || Object.keys(data).length === 0) {
+      if (!supplierId && (!data || Object.keys(data).length === 0)) {
         window.location.href = '/perfil-edit';
         return;
       }
@@ -53,7 +63,7 @@
       });
     } catch (e) {
       console.error('fetchProfile error', e);
-      window.location.href = '/perfil-edit';
+      window.location.href = supplierId ? '/proveedores' : '/perfil-edit';
     }
   }
 
@@ -118,17 +128,15 @@
         const err = await res.json().catch(() => null);
         throw new Error(err?.detail || 'No se pudo eliminar el documento.');
       }
-      // Actualizar la lista local y persistir en gestion para que no reaparezca
       currentProfile.documents = (currentProfile.documents || []).filter(d => encodeURIComponent(d.filename) !== filename);
       try {
-        await fetch(`${API}/suppliers/me`, {
+        await fetch(profileUrl(), {
           method: 'PUT', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
           body: JSON.stringify({ documents: currentProfile.documents })
         });
       } catch (e) {
         console.error('Error al persistir metadatos tras eliminar:', e);
       }
-      // Re-renderizar perfil sin recargar la página
       fetchProfile();
     } catch (err) {
       console.error('delete error', err);
@@ -145,7 +153,9 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('editProfileBtn');
-    if (btn) btn.addEventListener('click', () => window.location.href = '/perfil-edit');
+    if (btn) btn.addEventListener('click', () => {
+      window.location.href = supplierId ? `/perfil-edit/${supplierId}` : '/perfil-edit';
+    });
 
     const tabs = Array.from(document.querySelectorAll('.tabs .tab'));
     tabs.forEach((tab, index) => tab.addEventListener('click', () => setActiveTab(index)));

@@ -94,12 +94,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminEmailDisplay = document.getElementById('adminEmailDisplay');
   const adminUserArea = document.getElementById('adminUserArea');
 
-  // Recuperar datos del login unificado
   const role = sessionStorage.getItem('portal_role') || '';
   const token = sessionStorage.getItem('portal_token') || null;
   const email = sessionStorage.getItem('portal_email') || '';
 
-  // Solo consideramos válido el token si el rol es admin
   if (role === 'admin' && token) {
     adminToken = token;
     adminEmailLocal = email;
@@ -166,7 +164,7 @@ function renderTable(suppliers) {
 
   if (!suppliers.length) {
     tbody.innerHTML =
-      '<tr><td colspan="6" style="text-align:center;padding:2.5rem;color:var(--text-faint)">Sin resultados.</td></tr>';
+      '<tr><td colspan="7" style="text-align:center;padding:2.5rem;color:var(--text-faint)">Sin resultados.</td></tr>';
     return;
   }
 
@@ -197,6 +195,10 @@ function renderTable(suppliers) {
           <option value="rechazado">Rechazado</option>
           <option value="pendiente">Pendiente</option>
         </select>
+      </td>
+      <td>
+        <a href="/perfil/${s.id}" class="btn btn-secondary" style="font-size:.78rem;padding:.3rem .6rem">Ver</a>
+        <a href="/perfil-edit/${s.id}" class="btn btn-primary" style="font-size:.78rem;padding:.3rem .6rem">Editar</a>
       </td>
     </tr>`
     )

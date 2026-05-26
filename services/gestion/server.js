@@ -1,14 +1,16 @@
+'use strict';
+
 /**
  * Microservicio Gestión — Puerto 8002
  *
  * GET    /suppliers/me                    → perfil del proveedor autenticado
  * PUT    /suppliers/me                    → actualiza perfil
  * GET    /suppliers/admin/list            → lista todos (solo admin)
+ * GET    /suppliers/admin/:id             → detalle de un proveedor (solo admin)
+ * PUT    /suppliers/admin/:id             → edita un proveedor (solo admin)
  * PATCH  /suppliers/admin/:id/status      → cambia estado (solo admin)
  * GET    /health
  */
-
-'use strict';
 
 const express = require('express');
 const cors    = require('cors');
@@ -158,6 +160,41 @@ app.put('/suppliers/me', authenticate, (req, res) => {
 app.get('/suppliers/admin/list', authenticate, requireAdmin, (req, res) => {
   const db = loadDB();
   res.json({ suppliers: db.suppliers, total: db.suppliers.length });
+});
+
+// GET /suppliers/admin/:id — detalle de un proveedor concreto (solo admin)
+app.get('/suppliers/admin/:id', authenticate, requireAdmin, (req, res) => {
+  const db = loadDB();
+  const s  = db.suppliers.find(x => x.id === req.params.id);
+  if (!s) return res.status(404).json({ detail: 'Proveedor no encontrado.' });
+  res.json(s);
+});
+
+// PUT /suppliers/admin/:id — edita el perfil de un proveedor concreto (solo admin)
+app.put('/suppliers/admin/:id', authenticate, requireAdmin, (req, res) => {
+  const db = loadDB();
+  const s  = db.suppliers.find(x => x.id === req.params.id);
+  if (!s) return res.status(404).json({ detail: 'Proveedor no encontrado.' });
+
+  const updates = {};
+  ALLOWED_FIELDS.forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
+
+  if (Array.isArray(req.body.documents)) {
+    updates.documents = req.body.documents.map(doc => ({
+      filename: doc.filename,
+      original: doc.original || doc.filename,
+      type: doc.type || 'Documento',
+      label: doc.label || doc.type || doc.filename,
+      uploaded_at: doc.uploaded_at || new Date().toISOString()
+    }));
+  }
+
+  updates.updated_at = new Date().toISOString();
+  Object.assign(s, updates);
+
+  if (hasMinimum(s) && s.status === 'pendiente') s.status = 'revision';
+  saveDB(db);
+  res.json(s);
 });
 
 app.patch('/suppliers/admin/:id/status', authenticate, requireAdmin, (req, res) => {

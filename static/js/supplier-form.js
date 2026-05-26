@@ -2,16 +2,31 @@ window.APP_BASE = window.APP_BASE || window.location.pathname.replace(/\/[^/]*$/
 window.API = window.API || (window.__API_BASE__ || window.APP_BASE).replace(/\/$/, '');
 window.token = window.token || sessionStorage.getItem('portal_token') || null;
 
+// SUPPLIER_ID se inyecta desde la vista EJS cuando el admin edita un proveedor concreto
+const supplierId = window.SUPPLIER_ID || null;
+
 const currentProfile = { documents: [] };
 
 if (!window.token) {
   window.location.href = '/';
 }
 
+// Devuelve la URL de API correcta según si somos admin editando otro proveedor o el propio
+function profileUrl() {
+  return supplierId
+    ? `${window.API}/suppliers/admin/${supplierId}`
+    : `${window.API}/suppliers/me`;
+}
+
+// URL a la que navegar al cancelar
+function cancelUrl() {
+  return supplierId ? `/perfil/${supplierId}` : '/perfil';
+}
+
 window.loadSupplierData = async function() {
   if (!window.token) return;
   try {
-    const res = await fetch(`${API}/suppliers/me`, { headers: { 'Authorization': 'Bearer ' + window.token } });
+    const res = await fetch(profileUrl(), { headers: { 'Authorization': 'Bearer ' + window.token } });
     if (!res.ok) return;
     const data = await res.json();
     ['razon_social','nombre_comercial','nif','actividad','direccion','codigo_postal','ciudad',
@@ -64,7 +79,7 @@ function renderUploadedDocs(documents) {
 async function openDocument(filename) {
   if (!filename || !window.token) return;
   try {
-    const res = await fetch(`${API}/documents/download/${filename}`, {
+    const res = await fetch(`${window.API}/documents/download/${filename}`, {
       headers: { 'Authorization': 'Bearer ' + window.token }
     });
     if (!res.ok) {
@@ -126,7 +141,7 @@ async function saveSupplierData(submit = false) {
   if (btn) btn.disabled = true;
 
   try {
-    const res = await fetch(`${API}/suppliers/me`, {
+    const res = await fetch(profileUrl(), {
       method: 'PUT', headers: { 'Authorization': 'Bearer ' + window.token, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
@@ -136,7 +151,11 @@ async function saveSupplierData(submit = false) {
     }
     const saved = await res.json();
     updateStatusBadges(saved);
-    showToast(submit ? '¡Datos enviados correctamente!' : 'Borrador guardado.', 'success', submit ? () => window.location.href = '/perfil' : null);
+    showToast(
+      submit ? '¡Datos guardados correctamente!' : 'Borrador guardado.',
+      'success',
+      submit ? () => window.location.href = cancelUrl() : null
+    );
   } catch (e) {
     showToast(e.message || 'Error al guardar.', 'error');
   } finally {
@@ -209,7 +228,7 @@ async function submitDocumentUpload() {
   form.append('document_label', (typeEl.value === 'Otro' ? labelEl.value.trim() : typeEl.value));
 
   try {
-    const res = await fetch(`${API}/documents/upload`, {
+    const res = await fetch(`${window.API}/documents/upload`, {
       method: 'POST', headers: { 'Authorization': 'Bearer ' + window.token }, body: form
     });
     if (!res.ok) {
@@ -237,7 +256,7 @@ async function submitDocumentUpload() {
 async function saveDocumentMetadata(documents) {
   if (!window.token) return;
   try {
-    const res = await fetch(`${API}/suppliers/me`, {
+    const res = await fetch(profileUrl(), {
       method: 'PUT', headers: { 'Authorization': 'Bearer ' + window.token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ documents })
     });
@@ -253,14 +272,13 @@ async function saveDocumentMetadata(documents) {
 }
 
 function handleFiles(files) {
-  // El formulario ahora usa el modal para subir documentos.
   return;
 }
 
 async function downloadDocument(filename) {
   if (!filename || !window.token) return;
   try {
-    const res = await fetch(`${API}/documents/download/${filename}`, {
+    const res = await fetch(`${window.API}/documents/download/${filename}`, {
       headers: { 'Authorization': 'Bearer ' + window.token }
     });
     if (!res.ok) {
@@ -286,7 +304,7 @@ async function deleteDocument(filename) {
   if (!filename || !window.token) return;
   if (!confirm('¿Eliminar este documento?')) return;
   try {
-    const res = await fetch(`${API}/documents/${filename}`, {
+    const res = await fetch(`${window.API}/documents/${filename}`, {
       method: 'DELETE',
       headers: { 'Authorization': 'Bearer ' + window.token }
     });
@@ -294,7 +312,6 @@ async function deleteDocument(filename) {
       const errData = await res.json().catch(() => null);
       throw new Error(errData?.detail || 'No se pudo eliminar el documento.');
     }
-    // Actualizar lista local y persistir en el backend (gestion)
     currentProfile.documents = currentProfile.documents.filter(doc => encodeURIComponent(doc.filename) !== filename);
     await saveDocumentMetadata(currentProfile.documents);
     renderUploadedDocs(currentProfile.documents);
@@ -317,6 +334,10 @@ function setActiveTab(index) {
 
 document.addEventListener('DOMContentLoaded', () => {
   loadSupplierData();
+
+  // Botón cancelar: vuelve al perfil correcto según si somos admin o proveedor
+  const cancelBtn = document.getElementById('cancelEditBtn');
+  if (cancelBtn) cancelBtn.addEventListener('click', () => window.location.href = cancelUrl());
 
   const form = document.getElementById('supplierForm');
   const tabs = Array.from(document.querySelectorAll('.tabs .tab'));

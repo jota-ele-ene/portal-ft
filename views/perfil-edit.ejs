@@ -1,3 +1,7 @@
+<%
+  // supplierId puede ser null (proveedor ve su propio perfil) o un UUID (admin edita el de otro)
+  const _sid = typeof supplierId !== 'undefined' && supplierId ? supplierId : null;
+%>
 <%-
   include('layout', {
     title: title,
@@ -97,7 +101,7 @@
       </div>
 
       <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1rem">
-        <button type="button" class="btn btn-secondary" onclick="window.location.href='/perfil'">Cancelar</button>
+        <button type="button" class="btn btn-secondary" id="cancelEditBtn">Cancelar</button>
         <button type="button" class="btn btn-secondary" onclick="saveDraft()">Guardar borrador</button>
         <button type="submit" class="btn btn-primary" id="submitFormBtn">Enviar para revisión</button>
       </div>
@@ -133,6 +137,10 @@
         </div>
       </div>
     </form>
+
+    <script>
+      window.SUPPLIER_ID = ${ JSON.stringify(_sid) };
+    </script>
   </div>
     `,
     scripts: ['/static/js/supplier-form.js']
