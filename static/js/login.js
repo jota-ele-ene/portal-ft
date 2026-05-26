@@ -1,4 +1,5 @@
 // login.js – flujo único: email → OTP → redirección según rol (admin/supplier)
+// La redirección post-login la decide el SERVIDOR (redirect_to en la respuesta)
 
 window.APP_BASE = window.APP_BASE || window.location.pathname.replace(/\/[^/]*$/, '');
 window.API = window.API || (window.__API_BASE__ || window.APP_BASE).replace(/\/$/, '');
@@ -6,11 +7,6 @@ window.API = window.API || (window.__API_BASE__ || window.APP_BASE).replace(/\/$
 let currentEmail = '';
 let otpTimer = null;
 window.token = null;
-
-function getQueryParam(name) {
-  const params = new URLSearchParams(window.location.search);
-  return params.get(name);
-}
 
 function showToast(msg, type = '') {
   const t = document.getElementById('toast');
@@ -21,7 +17,7 @@ function showToast(msg, type = '') {
   window._toastTimer = setTimeout(() => (t.className = ''), 4000);
 }
 
-// Página de email (ej. /): envía OTP
+// Página de email (/): envía OTP
 async function sendOtp(isResend = false) {
   const emailEl = document.getElementById('emailInput');
   const email = (emailEl ? emailEl.value : currentEmail).trim();
@@ -52,16 +48,10 @@ async function sendOtp(isResend = false) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Error al enviar el código.');
 
-    // Guarda email y next para la página OTP
-    const next = getQueryParam('next') || '';
     sessionStorage.setItem('portal_email', email);
-    sessionStorage.setItem('portal_next', next);
 
     if (isResend) showToast('Nuevo código enviado.', 'success');
-
-    // Navega a /login manteniendo next si lo hubiera
-    const otpUrl = next ? `/login?next=${encodeURIComponent(next)}` : '/login';
-    if (!isResend) window.location.href = otpUrl;
+    if (!isResend) window.location.href = '/login';
   } catch (e) {
     showToast(e.message, 'error');
   } finally {
@@ -82,7 +72,6 @@ function startOtpTimer() {
   let remaining = 300;
   const timerEl = document.getElementById('otpTimer');
   const resendEl = document.getElementById('resendBtn');
-  //if (resendEl) resendEl.style.display = 'none';
 
   otpTimer = setInterval(() => {
     remaining--;
@@ -102,7 +91,6 @@ function startOtpTimer() {
 document.addEventListener('DOMContentLoaded', () => {
   const otpSection = document.getElementById('step-otp');
 
-  // Página OTP (/login)
   if (otpSection) {
     const storedEmail = sessionStorage.getItem('portal_email') || '';
     if (storedEmail) {
@@ -117,16 +105,10 @@ document.addEventListener('DOMContentLoaded', () => {
     inputs.forEach((input, i, all) => {
       input.addEventListener('input', () => {
         input.classList.toggle('filled', !!input.value);
+        if (input.value && i < all.length - 1) all[i + 1].focus();
 
-        // Mover foco al siguiente
-        if (input.value && i < all.length - 1) {
-          all[i + 1].focus();
-        }
-
-        // NUEVO: cuando se rellenen los 6 dígitos, verificar automáticamente
         const code = Array.from(all).map(inp => inp.value).join('');
         if (code.length === all.length && code.replace(/\D/g, '').length === all.length) {
-          // Llamas directamente a tu función de verificación
           verifyOtp();
         }
       });
@@ -147,8 +129,6 @@ document.addEventListener('DOMContentLoaded', () => {
             all[j].classList.add('filled');
           }
         });
-
-        // NUEVO: si se pega un código completo, verificar también
         const code = Array.from(all).map(inp => inp.value).join('');
         if (code.length === all.length && code.replace(/\D/g, '').length === all.length) {
           verifyOtp();
@@ -189,7 +169,6 @@ async function verifyOtp() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Código incorrecto.');
 
-    // Guardar token y rol en memoria y en sessionStorage
     window.token = data.access_token;
     sessionStorage.setItem('portal_token', data.access_token);
     sessionStorage.setItem('portal_role', data.role || 'supplier');
@@ -202,28 +181,9 @@ async function verifyOtp() {
     if (headerUser) headerUser.style.display = 'flex';
     if (headerEmail) headerEmail.textContent = currentEmail;
 
-    const storedNext = sessionStorage.getItem('portal_next') || getQueryParam('next') || '';
-    const role = data.role || 'supplier';
-
-    let target = '';
-    // Si el next apunta a /proveedores pero el rol no es admin, ignora el next
-    if (storedNext) {
-      if ((storedNext.startsWith('/proveedores') || storedNext.includes('/proveedores')) && role !== 'admin') {
-        target = '/perfil';
-      } else {
-        target = storedNext;
-      }
-      sessionStorage.removeItem('portal_next');
-    } else {
-      target = role === 'admin' ? '/proveedores' : '/perfil';
-    }
-
-    // Limpia el parámetro next de la URL tras login
-    if (window.history && window.history.replaceState) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('next');
-      window.history.replaceState({}, document.title, url.pathname);
-    }
+    // La redirección la decide el servidor; fallback por rol si no viene
+    const target = data.redirect_to ||
+      (data.role === 'admin' ? '/proveedores' : '/perfil');
 
     window.location.href = target;
   } catch (e) {
@@ -238,10 +198,8 @@ async function verifyOtp() {
   }
 }
 
-// Volver a la pantalla de email respetando next si existe
+// Volver al login siempre sin parámetros
 function backToLogin() {
   clearInterval(otpTimer);
-  const next = getQueryParam('next');
-  const url = next ? `/?next=${encodeURIComponent(next)}` : '/';
-  window.location.href = url;
+  window.location.href = '/';
 }

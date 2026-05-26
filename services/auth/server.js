@@ -1,8 +1,11 @@
 /**
- * Microservicio Auth — Puerto 8001
+ * Microservicio Auth
  *
  * POST /auth/otp/request  → genera y envía OTP por email
- * POST /auth/otp/verify   → valida OTP y devuelve JWT
+ * POST /auth/otp/verify   → valida OTP y devuelve JWT + redirect_to
+ * GET  /auth/me           → info del token
+ * POST /auth/invite       → invita a un proveedor
+ * POST /auth/logout       → revoca el token
  * GET  /health            → health check
  */
 
@@ -37,6 +40,13 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'admin@tuempresa.com')
                       .split(',').map(e => e.trim().toLowerCase());
 const ADMIN_EMAIL  = (process.env.ADMIN_EMAIL || ADMIN_EMAILS[0] || 'admin@tuempresa.com').trim().toLowerCase();
 
+// ── Mapa de páginas permitidas por rol ────────────────────────────────────────
+// El primer elemento de cada array es la página de destino por defecto tras el login.
+const DEFAULT_ROLE_PAGES = {
+  admin:    ['/proveedores', '/perfil'],
+  supplier: ['/perfil', '/perfil-edit']
+};
+
 // ── Middlewares globales ──────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
@@ -44,9 +54,13 @@ app.use(express.json());
 // ── TinyDB-style JSON store ───────────────────────────────────────────────────
 function sanitizeAuthDB(db) {
   db = db || {};
-  if (!Array.isArray(db.otp_codes)) db.otp_codes = [];
-  if (!Array.isArray(db.users)) db.users = [];
+  if (!Array.isArray(db.otp_codes))      db.otp_codes      = [];
+  if (!Array.isArray(db.users))          db.users          = [];
   if (!Array.isArray(db.revoked_tokens)) db.revoked_tokens = [];
+  // Persiste el mapa de páginas si no existe aún
+  if (!db.role_pages || typeof db.role_pages !== 'object') {
+    db.role_pages = DEFAULT_ROLE_PAGES;
+  }
   return db;
 }
 
@@ -55,11 +69,15 @@ function loadDB() {
     if (!fs.existsSync(DB_PATH)) {
       const dir = path.dirname(DB_PATH);
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(DB_PATH, JSON.stringify({ otp_codes: [], users: [], revoked_tokens: [] }), 'utf8');
+      fs.writeFileSync(
+        DB_PATH,
+        JSON.stringify(sanitizeAuthDB({}), null, 2),
+        'utf8'
+      );
     }
     return sanitizeAuthDB(JSON.parse(fs.readFileSync(DB_PATH, 'utf8')));
   } catch {
-    return sanitizeAuthDB({ otp_codes: [], users: [], revoked_tokens: [] });
+    return sanitizeAuthDB({});
   }
 }
 
@@ -83,7 +101,7 @@ function revokeToken(token) {
 
   if (!db.revoked_tokens.some(item => item.jti === decoded.jti)) {
     db.revoked_tokens.push({
-      jti: decoded.jti,
+      jti:        decoded.jti,
       revoked_at: now,
       expires_at: decoded.exp || now + TOKEN_EXP * 60
     });
@@ -92,14 +110,31 @@ function revokeToken(token) {
   return true;
 }
 
+// ── Helpers de rol y redirección ──────────────────────────────────────────────
+/**
+ * Devuelve la página de destino por defecto para un rol dado,
+ * leyendo primero el mapa persistido en la DB.
+ */
+function getDefaultRedirect(db, role) {
+  const pages = (db.role_pages && db.role_pages[role]) || DEFAULT_ROLE_PAGES[role] || ['/'];
+  return Array.isArray(pages) && pages.length > 0 ? pages[0] : '/';
+}
+
+/**
+ * Devuelve las páginas permitidas para un rol.
+ */
+function getAllowedPages(db, role) {
+  return (db.role_pages && db.role_pages[role]) || DEFAULT_ROLE_PAGES[role] || [];
+}
+
 // ── Mailer ─────────────────────────────────────────────────────────────────────
 function getTransporter() {
-  if (!SMTP_USER) return null; // modo dev: imprimir en consola
+  if (!SMTP_USER) return null;
   return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
+    host:   SMTP_HOST,
+    port:   SMTP_PORT,
     secure: SMTP_PORT === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASS }
+    auth:   { user: SMTP_USER, pass: SMTP_PASS }
   });
 }
 
@@ -128,7 +163,7 @@ function buildOtpEmailHtml(otp) {
 }
 
 function buildInviteEmailText(email) {
-  return `Has sido invitado al Portal de Proveedores de Fundación Telefónica.\n\n` +
+  return `Has sido invitado al Portal de Proveedores.\n\n` +
          `Accede con este correo: ${email}\n` +
          `Entra al portal aquí: ${PORTAL_URL}\n\n` +
          `Si tienes algún problema, contacta a ${ADMIN_EMAIL}.`;
@@ -153,12 +188,9 @@ function buildInviteEmailHtml(email) {
 async function sendOtpEmail(to, otp) {
   const transporter = getTransporter();
   console.log(`[DEV] OTP para ${to}: ${otp}`);
-  if (!transporter) {
-    return;
-  }
+  if (!transporter) return;
   await transporter.sendMail({
-    from: SMTP_FROM,
-    to,
+    from: SMTP_FROM, to,
     subject: `Tu código de acceso: ${otp}`,
     text: buildOtpEmailText(otp),
     html: buildOtpEmailHtml(otp)
@@ -168,12 +200,9 @@ async function sendOtpEmail(to, otp) {
 async function sendInviteEmail(to) {
   const transporter = getTransporter();
   console.log(`[DEV] Invitación para ${to}: ${PORTAL_URL}`);
-  if (!transporter) {
-    return;
-  }
+  if (!transporter) return;
   await transporter.sendMail({
-    from: SMTP_FROM,
-    to,
+    from: SMTP_FROM, to,
     subject: 'Invitación al Portal de Proveedores',
     text: buildInviteEmailText(to),
     html: buildInviteEmailHtml(to)
@@ -240,15 +269,31 @@ app.get('/health', (req, res) =>
   res.json({ status: 'ok', service: 'auth' })
 );
 
-// Devuelve la info del token si es válido
 app.get('/auth/me', authenticate, (req, res) => {
-  // req.user viene del JWT: { sub, role, iat, jti, exp }
   res.json({
     email: req.user.sub,
     role:  req.user.role,
     iat:   req.user.iat,
     exp:   req.user.exp
   });
+});
+
+// Devuelve el mapa de páginas por rol (solo admin)
+app.get('/auth/role-pages', authenticate, requireAdmin, (req, res) => {
+  const db = loadDB();
+  res.json({ role_pages: db.role_pages });
+});
+
+// Actualiza el mapa de páginas por rol (solo admin)
+app.put('/auth/role-pages', authenticate, requireAdmin, (req, res) => {
+  const { role_pages } = req.body;
+  if (!role_pages || typeof role_pages !== 'object') {
+    return res.status(422).json({ detail: 'role_pages debe ser un objeto.' });
+  }
+  const db = loadDB();
+  db.role_pages = role_pages;
+  saveDB(db);
+  res.json({ message: 'Mapa de páginas actualizado.', role_pages: db.role_pages });
 });
 
 app.post('/auth/otp/request', async (req, res) => {
@@ -268,7 +313,6 @@ app.post('/auth/otp/request', async (req, res) => {
   const otp = generateOtp();
   const now = Math.floor(Date.now() / 1000);
 
-  // Eliminar OTPs anteriores del mismo email
   db.otp_codes = db.otp_codes.filter(o => o.email !== emailLower);
   db.otp_codes.push({
     email:      emailLower,
@@ -316,12 +360,17 @@ app.post('/auth/otp/verify', (req, res) => {
   const user  = getOrCreateUser(db, emailLower);
   saveDB(db);
 
-  const token = createJWT(emailLower, user.role);
+  const token       = createJWT(emailLower, user.role);
+  const redirectTo  = getDefaultRedirect(db, user.role);
+  const allowedPages = getAllowedPages(db, user.role);
+
   res.json({
-    access_token: token,
-    token_type:   'bearer',
-    role:         user.role,
-    expires_in:   TOKEN_EXP * 60
+    access_token:  token,
+    token_type:    'bearer',
+    role:          user.role,
+    expires_in:    TOKEN_EXP * 60,
+    redirect_to:   redirectTo,
+    allowed_pages: allowedPages
   });
 });
 

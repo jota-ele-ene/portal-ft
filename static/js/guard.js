@@ -1,17 +1,15 @@
+// guard.js – client-side route guard; NO ?next= logic
 function ensureAuthenticated(expectedRole) {
   const token = sessionStorage.getItem('portal_token');
   const role  = sessionStorage.getItem('portal_role') || 'supplier';
 
-  // 1) Sin token → a login con next SOLO UNA VEZ
+  // Sin token → siempre a login sin parámetros
   if (!token) {
-    const here = window.location.pathname + window.location.search;
-    const loginUrl = new URL('/', window.location.origin);
-    loginUrl.searchParams.set('next', here);
-    window.location.href = loginUrl.toString();
+    window.location.href = '/';
     return false;
   }
 
-  // 2) Con token, ya NO usamos ?next para nada, solo miramos rol
+  // Con token, redirigir a la página por defecto del rol si no coincide
   if (expectedRole === 'admin' && role !== 'admin') {
     window.location.href = '/perfil';
     return false;

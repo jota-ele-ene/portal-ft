@@ -26,15 +26,9 @@ function isTokenRevoked(jti) {
 function requireAuth(req, res, next) {
   const auth = req.headers.authorization || '';
 
-  // Sin token → redirigir a home solo en peticiones HTML
   if (!auth.startsWith('Bearer ')) {
-    // Si el cliente pide HTML (navegador) redirigimos
     const acceptsHtml = req.accepts(['html', 'json']) === 'html';
-    if (acceptsHtml) {
-      const nextUrl = encodeURIComponent(req.originalUrl || '/perfil');
-      return res.redirect(`/?next=${nextUrl}`);
-    }
-    // Si es API (JSON), respondemos 401
+    if (acceptsHtml) return res.redirect('/');
     return res.status(401).json({ detail: 'Token no proporcionado.' });
   }
 
@@ -44,21 +38,16 @@ function requireAuth(req, res, next) {
 
     if (isTokenRevoked(payload.jti)) {
       const acceptsHtml = req.accepts(['html', 'json']) === 'html';
-      if (acceptsHtml) {
-        const nextUrl = encodeURIComponent(req.originalUrl || '/perfil');
-        return res.redirect(`/?next=${nextUrl}`);
-      }
+      if (acceptsHtml) return res.redirect('/');
       return res.status(401).json({ detail: 'Token revocado. Inicia sesión de nuevo.' });
     }
 
-    req.user = payload;
+    req.user  = payload;
+    req.token = token;
     next();
   } catch (e) {
     const acceptsHtml = req.accepts(['html', 'json']) === 'html';
-    if (acceptsHtml) {
-      const nextUrl = encodeURIComponent(req.originalUrl || '/perfil');
-      return res.redirect(`/?next=${nextUrl}`);
-    }
+    if (acceptsHtml) return res.redirect('/');
     return res.status(401).json({ detail: 'Token inválido o expirado.' });
   }
 }
@@ -71,4 +60,3 @@ function requireAdmin(req, res, next) {
 }
 
 module.exports = { requireAuth, requireAdmin };
-
