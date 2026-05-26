@@ -113,6 +113,9 @@ const ALLOWED_FIELDS = [
   'telefono','iban','banco'
 ];
 
+// responsible_email solo editable por admin
+const ADMIN_FIELDS = ['responsible_email'];
+
 const VALID_STATUSES = new Set(['pendiente','revision','aprobado','rechazado']);
 
 // ── Rutas ──────────────────────────────────────────────────────────────────────
@@ -177,7 +180,7 @@ app.put('/suppliers/admin/:id', authenticate, requireAdmin, (req, res) => {
   if (!s) return res.status(404).json({ detail: 'Proveedor no encontrado.' });
 
   const updates = {};
-  ALLOWED_FIELDS.forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
+  [...ALLOWED_FIELDS, ...ADMIN_FIELDS].forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
 
   if (Array.isArray(req.body.documents)) {
     updates.documents = req.body.documents.map(doc => ({

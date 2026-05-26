@@ -52,7 +52,8 @@ function showInviteForm() {
 
 async function inviteSupplier() {
   const emailInput = document.getElementById('inviteEmailInput');
-  const error = document.getElementById('inviteError');
+  const nameInput  = document.getElementById('inviteNameInput');
+  const error   = document.getElementById('inviteError');
   const success = document.getElementById('inviteSuccess');
   if (!emailInput || !error || !success) return;
 
@@ -74,6 +75,7 @@ async function inviteSupplier() {
         'Content-Type': 'application/json',
         Authorization: 'Bearer ' + adminToken
       },
+      // El backend leerá req.user.sub (admin) como responsible_email
       body: JSON.stringify({ email })
     });
     const data = await res.json();
@@ -82,6 +84,8 @@ async function inviteSupplier() {
     success.textContent = 'Invitación enviada correctamente.';
     success.style.display = 'block';
     emailInput.value = '';
+    if (nameInput) nameInput.value = '';
+    await loadSuppliers();
   } catch (e) {
     error.textContent = e.message;
     error.style.display = 'block';
@@ -94,12 +98,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminEmailDisplay = document.getElementById('adminEmailDisplay');
   const adminUserArea = document.getElementById('adminUserArea');
 
-  const role = sessionStorage.getItem('portal_role') || '';
+  const role  = sessionStorage.getItem('portal_role')  || '';
   const token = sessionStorage.getItem('portal_token') || null;
   const email = sessionStorage.getItem('portal_email') || '';
 
   if (role === 'admin' && token) {
-    adminToken = token;
+    adminToken      = token;
     adminEmailLocal = email;
   }
 
@@ -116,6 +120,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     loadSuppliers();
   }
+
+  // Cerrar menús desplegables al hacer click fuera
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.action-menu-wrapper')) {
+      document.querySelectorAll('.action-menu').forEach(m => m.style.display = 'none');
+    }
+    if (!e.target.closest('.status-dropdown-wrapper')) {
+      document.querySelectorAll('.status-dropdown').forEach(m => m.style.display = 'none');
+    }
+  });
 });
 
 async function loadSuppliers() {
@@ -139,11 +153,11 @@ async function loadSuppliers() {
 }
 
 function filterTable() {
-  const qEl = document.getElementById('searchInput');
+  const qEl  = document.getElementById('searchInput');
   const stEl = document.getElementById('statusFilter');
   if (!qEl || !stEl) return;
 
-  const q = qEl.value.toLowerCase();
+  const q  = qEl.value.toLowerCase();
   const st = stEl.value;
 
   renderTable(
@@ -152,11 +166,21 @@ function filterTable() {
         !q ||
         (s.razon_social || '').toLowerCase().includes(q) ||
         (s.nif || '').toLowerCase().includes(q) ||
-        (s.email || '').toLowerCase().includes(q);
+        (s.email || '').toLowerCase().includes(q) ||
+        (s.responsible_email || '').toLowerCase().includes(q);
       return matchQ && (!st || s.status === st);
     })
   );
 }
+
+const STATUS_LABELS = {
+  pendiente: 'Pendiente',
+  revision:  'En revisión',
+  aprobado:  'Aprobado',
+  rechazado: 'Rechazado'
+};
+
+const STATUS_NEXT = ['pendiente', 'revision', 'aprobado', 'rechazado'];
 
 function renderTable(suppliers) {
   const tbody = document.getElementById('suppliersBody');
@@ -164,45 +188,82 @@ function renderTable(suppliers) {
 
   if (!suppliers.length) {
     tbody.innerHTML =
-      '<tr><td colspan="7" style="text-align:center;padding:2.5rem;color:var(--text-faint)">Sin resultados.</td></tr>';
+      '<tr><td colspan="5" style="text-align:center;padding:2.5rem;color:var(--text-faint)">Sin resultados.</td></tr>';
     return;
   }
 
-  const labels = {
-    pendiente: 'Pendiente',
-    revision: 'En revisión',
-    aprobado: 'Aprobado',
-    rechazado: 'Rechazado'
-  };
-
   tbody.innerHTML = suppliers
-    .map(
-      s => `
+    .map(s => {
+      const nombre = s.razon_social || s.nombre_comercial || s.email || '—';
+      const responsable = s.responsible_email || '—';
+      const status  = s.status || 'pendiente';
+      const fecha   = s.updated_at ? new Date(s.updated_at).toLocaleDateString('es-ES') : '—';
+
+      // Opciones del dropdown de estado (excluyendo el actual)
+      const statusOptions = STATUS_NEXT
+        .filter(st => st !== status)
+        .map(st => `<button class="status-option" onclick="updateStatus('${s.id}','${st}');closeStatusDropdown(this)" style="display:block;width:100%;text-align:left;padding:.4rem .75rem;border:none;background:none;cursor:pointer;font-size:.82rem;color:var(--text)">${STATUS_LABELS[st]}</button>`)
+        .join('');
+
+      return `
     <tr>
-      <td style="font-weight:600">${s.razon_social || '—'}</td>
-      <td style="font-family:monospace;font-size:.82rem">${s.nif || '—'}</td>
-      <td>${s.email || '—'}</td>
-      <td><span class="badge badge-${s.status || 'pendiente'}">${labels[s.status] || 'Pendiente'}</span></td>
-      <td style="color:var(--text-muted);font-size:.78rem">
-        ${s.updated_at ? new Date(s.updated_at).toLocaleDateString('es-ES') : '—'}
+      <td style="font-weight:600">
+        <a href="/perfil/${s.id}" style="color:var(--primary);text-decoration:none">${nombre}</a>
       </td>
+      <td style="font-size:.82rem;color:var(--text-muted)">${responsable}</td>
       <td>
-        <select class="form-control" style="width:130px;font-size:.78rem;padding:.3rem .5rem"
-          onchange="updateStatus('${s.id}',this.value)">
-          <option value="">Cambiar…</option>
-          <option value="revision">En revisión</option>
-          <option value="aprobado">Aprobado</option>
-          <option value="rechazado">Rechazado</option>
-          <option value="pendiente">Pendiente</option>
-        </select>
+        <div class="status-dropdown-wrapper" style="position:relative;display:inline-block">
+          <button class="badge badge-${status}" onclick="toggleStatusDropdown(this)" title="Cambiar estado"
+            style="cursor:pointer;border:none;background:none;padding:0;font:inherit">
+            ${STATUS_LABELS[status]} ▾
+          </button>
+          <div class="status-dropdown" style="display:none;position:absolute;top:100%;left:0;z-index:200;
+            background:var(--surface);border:1px solid var(--border);border-radius:.5rem;
+            box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:130px;padding:.25rem 0">
+            ${statusOptions}
+          </div>
+        </div>
       </td>
-      <td>
-        <a href="/perfil/${s.id}" class="btn btn-secondary" style="font-size:.78rem;padding:.3rem .6rem">Ver</a>
-        <a href="/perfil-edit/${s.id}" class="btn btn-primary" style="font-size:.78rem;padding:.3rem .6rem">Editar</a>
+      <td style="color:var(--text-muted);font-size:.78rem">${fecha}</td>
+      <td style="text-align:right">
+        <div class="action-menu-wrapper" style="position:relative;display:inline-block">
+          <button class="btn btn-ghost" onclick="toggleActionMenu(this)" title="Acciones"
+            style="padding:.25rem .5rem;font-size:1.1rem;line-height:1">⋯</button>
+          <div class="action-menu" style="display:none;position:absolute;right:0;top:100%;z-index:200;
+            background:var(--surface);border:1px solid var(--border);border-radius:.5rem;
+            box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:120px;padding:.25rem 0">
+            <a href="/perfil/${s.id}" style="display:block;padding:.45rem .85rem;text-decoration:none;
+              font-size:.85rem;color:var(--text)">Ver</a>
+            <a href="/perfil-edit/${s.id}" style="display:block;padding:.45rem .85rem;text-decoration:none;
+              font-size:.85rem;color:var(--text)">Editar</a>
+          </div>
+        </div>
       </td>
-    </tr>`
-    )
+    </tr>`;
+    })
     .join('');
+}
+
+function toggleActionMenu(btn) {
+  // Cerrar otros menús abiertos
+  document.querySelectorAll('.action-menu').forEach(m => {
+    if (m !== btn.nextElementSibling) m.style.display = 'none';
+  });
+  const menu = btn.nextElementSibling;
+  if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+function toggleStatusDropdown(btn) {
+  document.querySelectorAll('.status-dropdown').forEach(m => {
+    if (m !== btn.nextElementSibling) m.style.display = 'none';
+  });
+  const dropdown = btn.nextElementSibling;
+  if (dropdown) dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+}
+
+function closeStatusDropdown(optionBtn) {
+  const dropdown = optionBtn.closest('.status-dropdown');
+  if (dropdown) dropdown.style.display = 'none';
 }
 
 async function updateStatus(id, status) {

@@ -36,12 +36,12 @@ const SMTP_FROM    = process.env.SMTP_FROM  || 'portal@tuempresa.com';
 const PORTAL_URL   = process.env.PORTAL_URL || `http://localhost:${PORT}`;
 const DATA_PATH    = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
 const DB_PATH      = process.env.AUTH_DB_PATH || path.join(DATA_PATH, 'auth.json');
+const SUPPLIERS_DB_PATH = process.env.GESTION_DB_PATH || path.join(DATA_PATH, 'suppliers.json');
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'admin@tuempresa.com')
                       .split(',').map(e => e.trim().toLowerCase());
 const ADMIN_EMAIL  = (process.env.ADMIN_EMAIL || ADMIN_EMAILS[0] || 'admin@tuempresa.com').trim().toLowerCase();
 
 // ── Mapa de páginas permitidas por rol ────────────────────────────────────────
-// El primer elemento de cada array es la página de destino por defecto tras el login.
 const DEFAULT_ROLE_PAGES = {
   admin:    ['/proveedores', '/perfil'],
   supplier: ['/perfil', '/perfil-edit']
@@ -57,7 +57,6 @@ function sanitizeAuthDB(db) {
   if (!Array.isArray(db.otp_codes))      db.otp_codes      = [];
   if (!Array.isArray(db.users))          db.users          = [];
   if (!Array.isArray(db.revoked_tokens)) db.revoked_tokens = [];
-  // Persiste el mapa de páginas si no existe aún
   if (!db.role_pages || typeof db.role_pages !== 'object') {
     db.role_pages = DEFAULT_ROLE_PAGES;
   }
@@ -83,6 +82,20 @@ function loadDB() {
 
 function saveDB(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(sanitizeAuthDB(data), null, 2), 'utf8');
+}
+
+function loadSuppliersDB() {
+  try {
+    if (!fs.existsSync(SUPPLIERS_DB_PATH)) return { suppliers: [] };
+    return JSON.parse(fs.readFileSync(SUPPLIERS_DB_PATH, 'utf8'));
+  } catch {
+    return { suppliers: [] };
+  }
+}
+
+function saveSuppliersDB(data) {
+  fs.mkdirSync(path.dirname(SUPPLIERS_DB_PATH), { recursive: true });
+  fs.writeFileSync(SUPPLIERS_DB_PATH, JSON.stringify(data, null, 2), 'utf8');
 }
 
 function isTokenRevoked(jti, db) {
@@ -111,18 +124,11 @@ function revokeToken(token) {
 }
 
 // ── Helpers de rol y redirección ──────────────────────────────────────────────
-/**
- * Devuelve la página de destino por defecto para un rol dado,
- * leyendo primero el mapa persistido en la DB.
- */
 function getDefaultRedirect(db, role) {
   const pages = (db.role_pages && db.role_pages[role]) || DEFAULT_ROLE_PAGES[role] || ['/'];
   return Array.isArray(pages) && pages.length > 0 ? pages[0] : '/';
 }
 
-/**
- * Devuelve las páginas permitidas para un rol.
- */
 function getAllowedPages(db, role) {
   return (db.role_pages && db.role_pages[role]) || DEFAULT_ROLE_PAGES[role] || [];
 }
@@ -380,7 +386,9 @@ app.post('/auth/invite', authenticate, requireAdmin, async (req, res) => {
     return res.status(422).json({ detail: 'Email no válido.' });
   }
 
-  const emailLower = email.toLowerCase().trim();
+  const emailLower        = email.toLowerCase().trim();
+  // El admin que invita es req.user.sub
+  const responsibleEmail  = (req.user.sub || '').toLowerCase().trim();
   const db = loadDB();
   if (db.users.some(u => u.email === emailLower)) {
     return res.status(409).json({ detail: 'Ese correo ya está registrado.' });
@@ -394,6 +402,29 @@ app.post('/auth/invite', authenticate, requireAdmin, async (req, res) => {
   };
   db.users.push(user);
   saveDB(db);
+
+  // ── Crear/actualizar entrada en suppliers.json con responsible_email ────────
+  try {
+    const sdb = loadSuppliersDB();
+    let supplier = sdb.suppliers.find(s => s.email === emailLower);
+    if (!supplier) {
+      supplier = {
+        id:                crypto.randomUUID(),
+        email:             emailLower,
+        status:            'pendiente',
+        responsible_email: responsibleEmail,
+        created_at:        new Date().toISOString(),
+        updated_at:        new Date().toISOString()
+      };
+      sdb.suppliers.push(supplier);
+    } else {
+      supplier.responsible_email = responsibleEmail;
+      supplier.updated_at        = new Date().toISOString();
+    }
+    saveSuppliersDB(sdb);
+  } catch (e) {
+    console.error('[invite] Error actualizando suppliers.json:', e.message);
+  }
 
   try {
     await sendInviteEmail(emailLower);

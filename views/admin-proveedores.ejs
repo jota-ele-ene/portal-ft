@@ -25,16 +25,15 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>Razón social</th>
-            <th>NIF</th>
-            <th>Email</th>
+            <th>Nombre</th>
+            <th>Responsable</th>
             <th>Estado</th>
             <th>Actualizado</th>
-            <th>Cambiar estado</th>
+            <th style="text-align:right">Acciones</th>
           </tr>
         </thead>
         <tbody id="suppliersBody">
-          <tr><td colspan="6" style="text-align:center;padding:2.5rem;color:var(--text-faint)">Cargando…</td></tr>
+          <tr><td colspan="5" style="text-align:center;padding:2.5rem;color:var(--text-faint)">Cargando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -54,7 +53,7 @@
         <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:1rem">Invitar proveedor</h2>
         <div class="form-group">
           <label class="form-label" for="inviteEmailInput">Correo electrónico del proveedor</label>
-          <input class="form-control" type="text" id="inviteNameInput" placeholder="Nombre del proveedor" autocomplete="name">
+          <input class="form-control" type="text" id="inviteNameInput" placeholder="Nombre del proveedor" autocomplete="name" style="margin-bottom:.5rem">
           <input class="form-control" type="email" id="inviteEmailInput" placeholder="proveedor@empresa.com" autocomplete="email">
           <p class="field-error" id="inviteError" style="display:none"></p>
           <p id="inviteSuccess" style="display:none;color:var(--success);font-size:.9rem;margin-top:.75rem"></p>
