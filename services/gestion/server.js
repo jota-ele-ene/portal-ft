@@ -20,6 +20,9 @@ const crypto  = require('crypto');
 const app  = express();
 const PORT = process.env.PORT || 8002;
 
+app.use(cors());
+app.use(express.json());
+
 const SECRET_KEY   = process.env.JWT_SECRET       || 'cambia-este-secreto-en-produccion';
 const DATA_PATH    = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
 const AUTH_DB_PATH = path.join(DATA_PATH, 'auth.json');
@@ -172,11 +175,10 @@ app.patch('/suppliers/admin/:id/status', authenticate, requireAdmin, (req, res) 
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────────
+
 if (require.main === module) {
-  app.listen(PORT, '0.0.0.0', () => console.log(`[gestion] Puerto ${PORT}`));
-  app.use(cors());
-  app.use(express.json());
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+  app.listen(PORT, '0.0.0.0', () => console.log(`[gestion] Puerto ${PORT}`));
 } else {
   module.exports = app;
 }

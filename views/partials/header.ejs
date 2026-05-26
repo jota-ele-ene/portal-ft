@@ -43,7 +43,8 @@
         sessionStorage.removeItem('portal_token');
         sessionStorage.removeItem('portal_role');
         sessionStorage.removeItem('portal_email');
-        sessionStorage.removeItem('portal_next');
+        sessionStorage.removeItem('portal_redirect_to');
+        sessionStorage.removeItem('portal_allowed_pages');
         window.token = null;
         window.location.href = '/';
       });

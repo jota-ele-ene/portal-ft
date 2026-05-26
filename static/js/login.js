@@ -170,9 +170,11 @@ async function verifyOtp() {
     if (!res.ok) throw new Error(data.detail || 'Código incorrecto.');
 
     window.token = data.access_token;
-    sessionStorage.setItem('portal_token', data.access_token);
-    sessionStorage.setItem('portal_role', data.role || 'supplier');
-    sessionStorage.setItem('portal_email', currentEmail);
+    sessionStorage.setItem('portal_token',         data.access_token);
+    sessionStorage.setItem('portal_role',          data.role || 'supplier');
+    sessionStorage.setItem('portal_email',         currentEmail);
+    sessionStorage.setItem('portal_redirect_to',   data.redirect_to || '/');
+    sessionStorage.setItem('portal_allowed_pages', JSON.stringify(data.allowed_pages || []));
 
     clearInterval(otpTimer);
 
@@ -181,12 +183,10 @@ async function verifyOtp() {
     if (headerUser) headerUser.style.display = 'flex';
     if (headerEmail) headerEmail.textContent = currentEmail;
 
-    // La redirección la decide el servidor; fallback por rol si no viene
-    const target = data.redirect_to ||
-      (data.role === 'admin' ? '/proveedores' : '/perfil');
+    // La redirección la decide solo el servidor
+    window.location.href = data.redirect_to || '/';
 
-    window.location.href = target;
-  } catch (e) {
+} catch (e) {
     if (errEl) {
       errEl.textContent = e.message;
       errEl.style.display = 'block';

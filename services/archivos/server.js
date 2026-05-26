@@ -20,7 +20,7 @@ const mime       = require('mime-types');
 const app  = express();
 const PORT = process.env.PORT || 8003;
 
-const SECRET_KEY   = process.env.JWT_SECRET   || 'cambia-este-secreto-en-produccion';
+const SECRET_KEY   = process.env.JWT_SECRET   || 'z3i1KEO31gkjQxX2wzGWim86MQp1OjU0CSvYlXh8';
 const DATA_PATH    = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
 const AUTH_DB_PATH = path.join(DATA_PATH, 'auth.json');
 const UPLOADS_DIR  = process.env.UPLOADS_DIR  || path.join(DATA_PATH, 'uploads');
@@ -28,6 +28,11 @@ const STATIC_DIR   = process.env.STATIC_DIR   || path.join(__dirname, '..', '..'
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'admin@tuempresa.com').split(',').map(e => e.trim().toLowerCase());
 const MAX_SIZE_MB  = parseInt(process.env.MAX_FILE_SIZE_MB || '10');
 
+// Middlewares globales
+app.use(cors());
+app.use(express.json({ limit: `${MAX_SIZE_MB * 2}mb` }));
+app.use(express.urlencoded({ limit: `${MAX_SIZE_MB * 2}mb`, extended: true }));
+app.use('/static', express.static(STATIC_DIR));
 
 // ── Auth middleware ────────────────────────────────────────────────────────
 function authenticate(req, res, next) {
@@ -212,19 +217,12 @@ app.use((err, req, res, next) => {
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────────
+
 if (require.main === module) {
-  // Modo standalone (arranque individual, útil en dev)
-  app.use(cors());
-  app.use(express.json({ limit: `${MAX_SIZE_MB * 2}mb` }));
-  app.use(express.urlencoded({ limit: `${MAX_SIZE_MB * 2}mb`, extended: true }));
-  // Servir static (frontend)
-  app.use('/static', express.static(STATIC_DIR));
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
   app.listen(PORT, '0.0.0.0', () => console.log(`[archivos] Puerto ${PORT}`));
-  console.log(`[archivos] Servicio corriendo en puerto ${PORT}`);
   console.log(`[archivos] Directorio uploads: ${UPLOADS_DIR}`);
   console.log(`[archivos] Static dir: ${STATIC_DIR}`);
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 } else {
-  // Modo módulo: exportar solo el router
   module.exports = app;
 }

@@ -5,8 +5,6 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
-const { requireAuth, requireAdmin } = require('./static/js/auth');
-
 
 const app  = express();
 const PORT = process.env.PORT || 8000;
@@ -30,19 +28,10 @@ app.use(authService);
 app.use(gestionService);
 app.use(archivosService);
 
-// `requireAuth` is provided by the auth helper imported above; server-side rendering keeps pages simple.
-
 // ── Frontend estático ────────────────────────────────────────────────
 const STATIC_DIR = process.env.STATIC_DIR || path.join(__dirname, 'static');
 
 app.use('/static', express.static(STATIC_DIR));
-
-// Wrapper: if Authorization header is present, enforce `requireAuth`; otherwise allow render
-function requireAuthIfHeader(req, res, next) {
-  const auth = req.headers.authorization || '';
-  if (!auth.startsWith('Bearer ')) return next();
-  return requireAuth(req, res, next);
-}
 
 // ── Rutas de páginas (render EJS) ────────────────────────────────────
 app.get('/', (req, res) => {
@@ -56,22 +45,15 @@ app.get('/login', (req, res) => {
   res.render('login-otp', { title: 'Portal electrónico - Login' });
 });
 
-app.get('/proveedores', requireAuth, (req, res) => {
-  console.log('/proveedores - Usuario:', req.user);
-  console.log('/proveedores - Token:', req.token);
+app.get('/proveedores', (req, res) => {
   res.render('admin-proveedores', { title: 'Portal electrónico - Administración' });
 });
 
-// Edit view for profile
-app.get('/perfil-edit', requireAuth, (req, res) => {
-  console.log('/perfil-edit - Usuario:', req.user);
-  console.log('/perfil-edit - Token:', req.token);
+app.get('/perfil-edit', (req, res) => {
   res.render('perfil-edit', { title: 'Portal electrónico - Editar perfil' });
 });
 
-app.get('/perfil', requireAuth, (req, res) => {
-  console.log('/perfil - Usuario:', req.user);
-  console.log('/perfil - Token:', req.token);
+app.get('/perfil', (req, res) => {
   res.render('perfil', { title: 'Portal electrónico - Perfil de proveedores' });
 });
 
