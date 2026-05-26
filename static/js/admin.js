@@ -76,7 +76,7 @@ async function inviteSupplier() {
         Authorization: 'Bearer ' + adminToken
       },
       // El backend leerá req.user.sub (admin) como responsible_email
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ name: nameInput.value.trim(), email })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Error al enviar la invitación.');
@@ -215,30 +215,12 @@ function renderTable(suppliers) {
         <div class="status-dropdown-wrapper" style="position:relative;display:inline-block">
           <button class="badge badge-${status}" onclick="toggleStatusDropdown(this)" title="Cambiar estado"
             style="cursor:pointer;border:none;background:none;padding:0;font:inherit">
-            ${STATUS_LABELS[status]} ▾
+            ${STATUS_LABELS[status]}
           </button>
-          <div class="status-dropdown" style="display:none;position:absolute;top:100%;left:0;z-index:200;
-            background:var(--surface);border:1px solid var(--border);border-radius:.5rem;
-            box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:130px;padding:.25rem 0">
-            ${statusOptions}
           </div>
         </div>
       </td>
       <td style="color:var(--text-muted);font-size:.78rem">${fecha}</td>
-      <td style="text-align:right">
-        <div class="action-menu-wrapper" style="position:relative;display:inline-block">
-          <button class="btn btn-ghost" onclick="toggleActionMenu(this)" title="Acciones"
-            style="padding:.25rem .5rem;font-size:1.1rem;line-height:1">⋯</button>
-          <div class="action-menu" style="display:none;position:absolute;right:0;top:100%;z-index:200;
-            background:var(--surface);border:1px solid var(--border);border-radius:.5rem;
-            box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:120px;padding:.25rem 0">
-            <a href="/perfil/${s.id}" style="display:block;padding:.45rem .85rem;text-decoration:none;
-              font-size:.85rem;color:var(--text)">Ver</a>
-            <a href="/perfil-edit/${s.id}" style="display:block;padding:.45rem .85rem;text-decoration:none;
-              font-size:.85rem;color:var(--text)">Editar</a>
-          </div>
-        </div>
-      </td>
     </tr>`;
     })
     .join('');

@@ -381,7 +381,7 @@ app.post('/auth/otp/verify', (req, res) => {
 });
 
 app.post('/auth/invite', authenticate, requireAdmin, async (req, res) => {
-  const { email } = req.body;
+  const { name, email } = req.body;
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(422).json({ detail: 'Email no válido.' });
   }
@@ -410,7 +410,8 @@ app.post('/auth/invite', authenticate, requireAdmin, async (req, res) => {
     if (!supplier) {
       supplier = {
         id:                crypto.randomUUID(),
-        email:             emailLower,
+        razon_social:      name ? name.trim() : '',
+        email_contacto:             emailLower,
         status:            'pendiente',
         responsible_email: responsibleEmail,
         created_at:        new Date().toISOString(),
