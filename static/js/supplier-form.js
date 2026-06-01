@@ -29,11 +29,36 @@ const CP_PROVINCES = {
   window.location.href = '/';
 }
 
-let BANK_CODES = {};
+// Caché en memoria de entidades bancarias consultadas durante la sesión
+const BANK_CODES = {};
 
-function getBankTextFromCode(bankCode) {
+// loadBankCodes ya no descarga un fichero estático (que no existe).
+// La caché se rellena bajo demanda en fetchBankEntity().
+async function loadBankCodes() {
+  // No-op: mantenemos la firma para no cambiar el DOMContentLoaded listener.
+}
+
+// Consulta el endpoint /bank-entity y almacena el resultado en caché.
+async function fetchBankEntity(bankCode) {
+  if (!bankCode) return null;
+  if (BANK_CODES[bankCode]) return BANK_CODES[bankCode];
+  try {
+    const res = await fetch(`/bank-entity?code=${encodeURIComponent(bankCode)}`);
+    if (res.ok) {
+      const data = await res.json();
+      BANK_CODES[bankCode] = { nombre: data.name || '', swift: data.bic || '' };
+      return BANK_CODES[bankCode];
+    }
+  } catch (e) {
+    console.error('fetchBankEntity error', e);
+  }
+  return null;
+}
+
+async function getBankTextFromCode(bankCode) {
   if (!bankCode) return '';
-  if (BANK_CODES[bankCode]) return BANK_CODES[bankCode].nombre || BANK_CODES[bankCode].name || '';
+  const entity = await fetchBankEntity(bankCode);
+  if (entity && entity.nombre) return entity.nombre;
   return `Entidad ${bankCode}`;
 }
 
@@ -42,44 +67,10 @@ function getBranchTextFromCode(branchCode) {
   return `Sucursal ${branchCode}`;
 }
 
-async function loadBankCodes() {
-  try {
-    const res = await fetch('/data/bank_codes.json', {
-      headers: { 'Accept': 'application/json' }
-    });
-    if (!res.ok) {
-      throw new Error('No se pudieron cargar los códigos bancarios.');
-    }
-    const rows = await res.json();
-    BANK_CODES = rows.reduce((acc, row) => {
-      if (row && row.codigo) {
-        acc[row.codigo] = { nombre: row.nombre || '', swift: row.bic || '' };
-      }
-      return acc;
-    }, {});
-  } catch (e) {
-    console.error('loadBankCodes error', e);
-    BANK_CODES = {};
-  }
-}
-
 async function getSwiftFromCode(bankCode) {
   if (!bankCode) return '';
-  // Primero intenta desde BANK_CODES (códigos Spanish)
-  if (BANK_CODES[bankCode] && BANK_CODES[bankCode].swift) {
-    return BANK_CODES[bankCode].swift;
-  }
-  // Fallback: intenta desde el servidor (BdE)
-  try {
-    const res = await fetch(`/bank-entity?code=${encodeURIComponent(bankCode)}`);
-    if (res.ok) {
-      const data = await res.json();
-      return data.bic || '';
-    }
-  } catch (e) {
-    console.error('getSwiftFromCode fallback error', e);
-  }
-  return '';
+  const entity = await fetchBankEntity(bankCode);
+  return (entity && entity.swift) ? entity.swift : '';
 }
 
 // Extraer datos del IBAN
@@ -121,7 +112,7 @@ async function extractIbanData() {
   }
 
   const swift = await getSwiftFromCode(bankCode);
-  const bankText = getBankTextFromCode(bankCode);
+  const bankText = await getBankTextFromCode(bankCode);
   const branchText = getBranchTextFromCode(branchCode);
 
   swiftEl.value = swift;
@@ -360,7 +351,7 @@ function normalizeAddress(value) {
 function validatePhoneNumber(value) {
   const phone = String(value || '').trim();
   if (!phone) return true;
-  const normalized = phone.replace(/[\s()+\-.]/g, '');
+  const normalized = phone.replace(/[\s()+-\.]/g, '');
   return /^\+?\d{9,15}$/.test(normalized);
 }
 
