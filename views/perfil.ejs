@@ -1,112 +1,15 @@
 <%
-  // supplierId puede ser null (proveedor ve su propio perfil) o un UUID (admin ve el de otro)
-  const _sid = typeof supplierId !== 'undefined' && supplierId ? supplierId : null;
+  const modeValue = typeof mode !== 'undefined' ? mode : 'view';
+  const isEdit = modeValue === 'edit';
+  const scriptSrc = isEdit ? '/static/js/supplier-form.js' : '/static/js/supplier-view.js';
 %>
-<%-
-  include('layout', {
-    title: title,
-    body: `
-  <section class="step active" id="step-form">
-    <div style="display:flex;justify-content:flex-start;align-items:center;margin:.5rem">
-      <div>
-        <h1 style="font-size:1.2rem;font-weight:700;color:var(--text)">Mi perfil de proveedor</h1>
-        <p style="color:var(--text-muted);font-size:.9rem;margin-top:.25rem">Revisa la información y edítala cuando necesites actualizar.</p>
-      </div>
-    </div>
-
-    <div class="tabs" style="gap:.25rem;margin-bottom:.75rem;max-width:920px;margin:0 auto;     padding-left: 1em;">
-      <button type="button" class="tab active" data-tab="tab-fiscal">Fiscal</button>
-      <button type="button" class="tab" data-tab="tab-contacto">Contacto</button>
-      <button type="button" class="tab" data-tab="tab-bancario">Bancario</button>
-      <button type="button" class="tab" data-tab="tab-docs">Documentos</button>
-    </div>
-
-    <div class="card tab-panel active" id="tab-fiscal" style="max-width:920px;margin:0 auto;padding:1rem">
-      <div class="form-grid">
-        <div class="form-group">
-          <label class="form-label">Razón social</label>
-          <div class="form-read" id="summary_razon_social">—</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Nombre comercial</label>
-          <div class="form-read" id="summary_nombre_comercial">—</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">NIF / CIF</label>
-          <div class="form-read" id="summary_nif">—</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Actividad económica</label>
-          <div class="form-read" id="summary_actividad">—</div>
-        </div>
-        <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">Dirección fiscal</label>
-          <div class="form-read" id="summary_direccion">—</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Código postal</label>
-          <div class="form-read" id="summary_codigo_postal">—</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Ciudad</label>
-          <div class="form-read" id="summary_ciudad">—</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card tab-panel" id="tab-contacto" style="max-width:920px;margin:0 auto;padding:1rem">
-      <div class="form-grid">
-        <div class="form-group">
-          <label class="form-label">Persona de contacto</label>
-          <div class="form-read" id="summary_persona_contacto">—</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Email de contacto</label>
-          <div class="form-read" id="summary_email_contacto">—</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Teléfono</label>
-          <div class="form-read" id="summary_telefono">—</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card tab-panel" id="tab-bancario" style="max-width:920px;margin:0 auto;padding:1rem">
-      <div class="form-grid">
-        <div class="form-group">
-          <label class="form-label">IBAN</label>
-          <div class="form-read" id="summary_iban">—</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Entidad bancaria</label>
-          <div class="form-read" id="summary_banco">—</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card tab-panel" id="tab-docs" style="max-width:920px;margin:0 auto;padding:1rem">
-      <div style="display:grid;gap:.75rem">
-        <div class="form-group">
-          <label class="form-label">Estado de la documentación</label>
-          <div class="form-read" id="summary_docs">—</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Documentos adjuntos</label>
-          <div class="form-read" id="summary_files">No hay archivos cargados.</div>
-        </div>
-      </div>
-    </div>
-
-    <div style="display:flex;justify-content:flex-end;max-width:920px;margin:1rem auto 0">
-      <button class="btn btn-primary" id="editProfileBtn">Editar</button>
-    </div>
-
-    <script>
-      window.SUPPLIER_ID = ${ JSON.stringify(_sid) };
-    </script>
-    <script src="/static/js/supplier-view.js"></script>
-  </section>
-    `,
-    scripts: []
-  })
-%>
+<%- include('layout', {
+  title: title,
+  includeMain: function() {
+    return include('partials/perfil-common', { mode: modeValue, supplierId: supplierId });
+  },
+  scripts: [
+    'https://cdnjs.cloudflare.com/ajax/libs/validator/13.9.0/validator.min.js',
+    scriptSrc
+  ]
+}) %>

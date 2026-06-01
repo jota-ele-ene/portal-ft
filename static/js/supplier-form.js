@@ -9,9 +9,157 @@ window.token = window.token || sessionStorage.getItem('portal_token') || null;
 const supplierId = window.SUPPLIER_ID || null;
 
 const currentProfile = { documents: [] };
+const VALID_VIA_TYPES = ['Calle','Avenida','Paseo','Plaza','Camino','Travesía','Carretera','Urbanización','Ronda'];
+const DOC_TYPES = [
+  'Certificado de titularidad bancaria',
+  'Copia del modelo 036/037 donde conste el epígrafe de IAE',
+  'Otro'
+];
+const CP_PROVINCES = {
+  '01':'Álava','02':'Albacete','03':'Alicante','04':'Almería','05':'Ávila','06':'Badajoz','07':'Islas Baleares','08':'Barcelona',
+  '09':'Burgos','10':'Cáceres','11':'Cádiz','12':'Castellón','13':'Ciudad Real','14':'Córdoba','15':'A Coruña','16':'Cuenca',
+  '17':'Girona','18':'Granada','19':'Guadalajara','20':'Guipúzcoa','21':'Huelva','22':'Huesca','23':'Jaén','24':'León',
+  '25':'Lleida','26':'La Rioja','27':'Lugo','28':'Madrid','29':'Málaga','30':'Murcia','31':'Navarra','32':'Ourense','33':'Asturias',
+  '34':'Palencia','35':'Las Palmas','36':'Pontevedra','37':'Salamanca','38':'Santa Cruz de Tenerife','39':'Cantabria','40':'Segovia',
+  '41':'Sevilla','42':'Soria','43':'Tarragona','44':'Teruel','45':'Toledo','46':'Valencia','47':'Valladolid','48':'Vizcaya','49':'Zamora',
+  '50':'Zaragoza','51':'Ceuta','52':'Melilla'
+};
 
-if (!window.token) {
+  if (!window.token) {
   window.location.href = '/';
+}
+
+let BANK_CODES = {};
+
+function getBankTextFromCode(bankCode) {
+  if (!bankCode) return '';
+  if (BANK_CODES[bankCode]) return BANK_CODES[bankCode].nombre || BANK_CODES[bankCode].name || '';
+  return `Entidad ${bankCode}`;
+}
+
+function getBranchTextFromCode(branchCode) {
+  if (!branchCode) return '';
+  return `Sucursal ${branchCode}`;
+}
+
+async function loadBankCodes() {
+  try {
+    const res = await fetch('/data/bank_codes.json', {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!res.ok) {
+      throw new Error('No se pudieron cargar los códigos bancarios.');
+    }
+    const rows = await res.json();
+    BANK_CODES = rows.reduce((acc, row) => {
+      if (row && row.codigo) {
+        acc[row.codigo] = { nombre: row.nombre || '', swift: row.bic || '' };
+      }
+      return acc;
+    }, {});
+  } catch (e) {
+    console.error('loadBankCodes error', e);
+    BANK_CODES = {};
+  }
+}
+
+async function getSwiftFromCode(bankCode) {
+  if (!bankCode) return '';
+  // Primero intenta desde BANK_CODES (códigos Spanish)
+  if (BANK_CODES[bankCode] && BANK_CODES[bankCode].swift) {
+    return BANK_CODES[bankCode].swift;
+  }
+  // Fallback: intenta desde el servidor (BdE)
+  try {
+    const res = await fetch(`/bank-entity?code=${encodeURIComponent(bankCode)}`);
+    if (res.ok) {
+      const data = await res.json();
+      return data.bic || '';
+    }
+  } catch (e) {
+    console.error('getSwiftFromCode fallback error', e);
+  }
+  return '';
+}
+
+// Extraer datos del IBAN
+async function extractIbanData() {
+  const ibanEl = document.getElementById('iban');
+  const swiftEl = document.getElementById('swift');
+  const bancoEl = document.getElementById('banco');
+  const sucursalEl = document.getElementById('sucursal');
+  if (!ibanEl || !swiftEl) return;
+  
+  const iban = ibanEl.value.trim().toUpperCase().replace(/\s+/g, '');
+  const codigoEntidadEl = document.getElementById('codigo_entidad');
+  const codigoSucursalEl = document.getElementById('codigo_sucursal');
+  const branchAddressEl = document.getElementById('branchAddressResult');
+  if (!iban || iban.length < 24) {
+    swiftEl.value = '';
+    if (bancoEl) bancoEl.value = '';
+    if (sucursalEl) sucursalEl.value = '';
+    if (codigoEntidadEl) codigoEntidadEl.value = '';
+    if (codigoSucursalEl) codigoSucursalEl.value = '';
+    if (branchAddressEl) branchAddressEl.textContent = 'No disponible';
+    return;
+  }
+  
+  // El IBAN español tiene formato: CC DD BBBB SSSS CCCCCCCCCC
+  // CC = país, DD = dígitos de control, BBBB = código banco, SSSS = sucursal
+  const countryCode = iban.substring(0, 2);
+  const bankCode = iban.substring(4, 8);
+  const branchCode = iban.substring(8, 12);
+
+  if (countryCode !== 'ES') {
+    swiftEl.value = '';
+    if (bancoEl) bancoEl.value = '';
+    if (sucursalEl) sucursalEl.value = '';
+    if (codigoEntidadEl) codigoEntidadEl.value = '';
+    if (codigoSucursalEl) codigoSucursalEl.value = '';
+    if (branchAddressEl) branchAddressEl.textContent = 'No disponible';
+    return;
+  }
+
+  const swift = await getSwiftFromCode(bankCode);
+  const bankText = getBankTextFromCode(bankCode);
+  const branchText = getBranchTextFromCode(branchCode);
+
+  swiftEl.value = swift;
+
+  if (bancoEl) {
+    bancoEl.value = bankText;
+  }
+  if (sucursalEl) {
+    sucursalEl.value = branchText;
+  }
+  if (codigoEntidadEl) {
+    codigoEntidadEl.value = bankCode;
+  }
+  if (codigoSucursalEl) {
+    codigoSucursalEl.value = branchCode;
+  }
+  if (branchAddressEl && bankCode && branchCode) {
+    fetchBranchAddress(bankCode, branchCode)
+      .then(address => {
+        branchAddressEl.textContent = address || 'No disponible';
+      })
+      .catch(() => {
+        branchAddressEl.textContent = 'No disponible';
+      });
+  }
+}
+
+async function fetchBranchAddress(entidad, sucursal) {
+  if (!entidad || !sucursal) return '';
+  try {
+    const res = await fetch(`/branch-address?entidad=${encodeURIComponent(entidad)}&sucursal=${encodeURIComponent(sucursal)}`);
+    if (!res.ok) return '';
+    const json = await res.json();
+    return json.address || '';
+  } catch (e) {
+    console.error('fetchBranchAddress error', e);
+    return '';
+  }
 }
 
 // Devuelve la URL de API correcta según si somos admin editando otro proveedor o el propio
@@ -26,24 +174,54 @@ function cancelUrl() {
   return supplierId ? `/perfil/${supplierId}` : '/perfil';
 }
 
-window.loadSupplierData = async function() {
+async function loadSupplierData() {
   if (!window.token) return;
   try {
     const res = await fetch(profileUrl(), { headers: { 'Authorization': 'Bearer ' + window.token } });
     if (!res.ok) return;
     const data = await res.json();
-    ['razon_social','nombre_comercial','nif','actividad','direccion','codigo_postal','ciudad',
-     'persona_contacto','email_contacto','telefono','iban','banco'].forEach(f => {
+    ['razon_social','nombre_comercial','nif','actividad','codigo_postal','ciudad',
+     'persona_contacto','email_contacto','telefono','iban','swift','banco','sucursal','codigo_entidad','codigo_sucursal','pais_residencia_fiscal'].forEach(f => {
       const el = document.getElementById(f);
       if (el && data[f] !== undefined && data[f] !== null) el.value = data[f];
     });
+    if (data.codigo_entidad && data.codigo_sucursal) {
+      const branchAddressEl = document.getElementById('branchAddressResult');
+      if (branchAddressEl) {
+        fetchBranchAddress(data.codigo_entidad, data.codigo_sucursal)
+          .then(address => { branchAddressEl.textContent = address || 'No disponible'; })
+          .catch(() => { branchAddressEl.textContent = 'No disponible'; });
+      }
+    }
+    const monedaEl = document.getElementById('moneda_pago');
+    if (monedaEl && data.moneda_pago) {
+      monedaEl.value = data.moneda_pago;
+    } else if (monedaEl) {
+      monedaEl.value = 'EUR';
+    }
+    const tipoViaEl = document.getElementById('tipo_via');
+    const dirEl = document.getElementById('direccion');
+    if (tipoViaEl && data.tipo_via) tipoViaEl.value = data.tipo_via;
+    if (dirEl && data.direccion) {
+      const parsed = parseAddressString(data.direccion);
+      if (tipoViaEl && !tipoViaEl.value && parsed.tipo) tipoViaEl.value = parsed.tipo;
+      dirEl.value = parsed.direccion;
+    }
+    if (data.iban) {
+      // Completar texto de banco y sucursal basado en el IBAN
+      await extractIbanData();
+    }
+    const altaEl = document.getElementById('alta_036');
+    if (altaEl) {
+      altaEl.value = data.alta_036 === true ? 'true' : data.alta_036 === false ? 'false' : 'none';
+    }
     currentProfile.documents = Array.isArray(data.documents) ? data.documents : [];
     renderUploadedDocs(currentProfile.documents);
     updateStatusBadges(data);
   } catch (error) {
     console.error('Error loading profile', error);
   }
-};
+}
 
 function renderUploadedDocs(documents) {
   const container = document.getElementById('uploadedDocs');
@@ -112,32 +290,249 @@ function setBadge(id, status) {
   el.textContent = labels[status] || status;
 }
 
+function normalizeNif(value) {
+  return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function isValidNifNieCif(value) {
+  const input = normalizeNif(value);
+  if (!input) return false;
+  const nifReg = /^[0-9]{8}[A-Z]$/;
+  const nieReg = /^[XYZ][0-9]{7}[A-Z]$/;
+  const cifReg = /^[ABCDEFGHJNPQRSUVW][0-9]{7}[0-9A-J]$/;
+  const letters = 'TRWAGMYFPDXBNJZSQVHLCKE';
+
+  if (nifReg.test(input)) {
+    return input[8] === letters[parseInt(input.substr(0, 8), 10) % 23];
+  }
+
+  if (nieReg.test(input)) {
+    const prefix = { X: '0', Y: '1', Z: '2' };
+    const number = prefix[input[0]] + input.substr(1, 7);
+    return input[8] === letters[parseInt(number, 10) % 23];
+  }
+
+  if (cifReg.test(input)) {
+    const digits = input.substr(1, 7).split('').map(Number);
+    let sumA = 0;
+    let sumB = 0;
+    digits.forEach((digit, index) => {
+      if (index % 2 === 0) {
+        sumA += digit;
+      } else {
+        const doubled = digit * 2;
+        sumB += Math.floor(doubled / 10) + (doubled % 10);
+      }
+    });
+    const total = sumA + sumB;
+    const control = (10 - (total % 10)) % 10;
+    const controlLetters = 'JABCDEFGHI';
+    return input[8] === String(control) || input[8] === controlLetters[control];
+  }
+
+  return false;
+}
+
+function getProvinceFromPostalCode(cp) {
+  const postal = String(cp || '').trim();
+  if (!validator || !validator.isPostalCode(postal, 'ES')) return null;
+  return CP_PROVINCES[postal.slice(0, 2)] || null;
+}
+
+function parseAddressString(full) {
+  const address = String(full || '').trim();
+  for (const tipo of VALID_VIA_TYPES) {
+    if (address.toLowerCase().startsWith(tipo.toLowerCase() + ' ')) {
+      return { tipo, direccion: address.slice(tipo.length + 1).trim() };
+    }
+  }
+  return { tipo: '', direccion: address };
+}
+
+function normalizeAddress(value) {
+  const original = String(value || '').trim();
+  if (!original) return '';
+  const hasNumber = /\b(\d+|S\/?N)\b/i.test(original);
+  if (hasNumber) return original;
+  return original.replace(/\,*\s*$/, '') + ', S/N';
+}
+
+function validatePhoneNumber(value) {
+  const phone = String(value || '').trim();
+  if (!phone) return true;
+  const normalized = phone.replace(/[\s()+\-.]/g, '');
+  return /^\+?\d{9,15}$/.test(normalized);
+}
+
+function validateDocuments() {
+  const docs = currentProfile.documents || [];
+  const hasBankCert = docs.some(doc => {
+    const label = (doc.type || doc.label || '').toString().toLowerCase();
+    return label.includes('certificado de titularidad bancaria');
+  });
+  const has036 = docs.some(doc => {
+    const label = (doc.type || doc.label || '').toString().toLowerCase();
+    return label.includes('036/037') || label.includes('modelo 036') || label.includes('modelo 037');
+  });
+  const errors = [];
+  if (!hasBankCert) {
+    errors.push('Sube el Certificado de titularidad bancaria.');
+  }
+  const alta036 = document.getElementById('alta_036')?.value === 'true';
+  if (alta036 && !has036) {
+    errors.push('Sube la Copia del modelo 036/037 donde conste el epígrafe de IAE.');
+  }
+  return errors;
+}
+
+function openAltaModal() {
+  const modal = document.getElementById('altaModal');
+  if (!modal) return;
+  modal.style.display = 'block';
+  modal.removeAttribute('inert');
+}
+
+function closeAltaModal() {
+  const modal = document.getElementById('altaModal');
+  if (!modal) return;
+  modal.style.display = 'none';
+  modal.setAttribute('inert', '');
+}
+
+function submitAltaModal() {
+  const selected = document.querySelector('input[name="altaHacienda"]:checked');
+  if (!selected) {
+    showToast('Selecciona si estás dado de alta en Hacienda.', 'error');
+    return;
+  }
+  const alta = selected.value === 'si';
+  const altaEl = document.getElementById('alta_036');
+  if (altaEl) altaEl.value = alta ? 'true' : 'false';
+  closeAltaModal();
+  showToast('Respuesta registrada.', 'success');
+}
+
+function handleNifBlur() {
+  const nifEl = document.getElementById('nif');
+  const altaEl = document.getElementById('alta_036');
+  if (!nifEl || !altaEl) return;
+  const value = nifEl.value.trim();
+  if (value && isValidNifNieCif(value) && altaEl.value === 'none') {
+    openAltaModal();
+  }
+}
+
+function validateFormFields() {
+  const errors = [];
+  const razon = document.getElementById('razon_social')?.value.trim();
+  const nif = document.getElementById('nif')?.value.trim();
+  const tipoVia = document.getElementById('tipo_via')?.value.trim();
+  const direccionValue = document.getElementById('direccion')?.value.trim();
+  const postal = document.getElementById('codigo_postal')?.value.trim();
+  const ciudad = document.getElementById('ciudad')?.value.trim();
+  const pais = document.getElementById('pais_residencia_fiscal')?.value.trim();
+  const persona = document.getElementById('persona_contacto')?.value.trim();
+  const email = document.getElementById('email_contacto')?.value.trim();
+  const telefono = document.getElementById('telefono')?.value.trim();
+  const iban = document.getElementById('iban')?.value.trim();
+
+  if (!razon) errors.push('Razón social es obligatoria.');
+  if (!nif) {
+    errors.push('NIF/NIE/CIF es obligatorio.');
+  } else if (!isValidNifNieCif(nif)) {
+    errors.push('El NIF/NIE/CIF no es válido.');
+  }
+  if (!tipoVia) errors.push('Selecciona el tipo de vía.');
+  if (!direccionValue) {
+    errors.push('Nombre de la vía y número es obligatorio.');
+  }
+  if (direccionValue && !/\d|S\/?N/i.test(direccionValue)) {
+    errors.push('Indica un número de vía o añade S/N en la dirección.');
+  }
+  if (!postal) {
+    errors.push('El código postal es obligatorio.');
+  } else if (!validator.isPostalCode(postal, 'ES')) {
+    errors.push('El código postal debe ser un CP español de 5 dígitos.');
+  }
+  if (!ciudad) errors.push('La ciudad es obligatoria.');
+  if (!pais) errors.push('El país de residencia fiscal es obligatorio.');
+  if (!persona) errors.push('La persona de contacto es obligatoria.');
+  if (!email) {
+    errors.push('El email de contacto es obligatorio.');
+  } else if (!validator.isEmail(email)) {
+    errors.push('El email de contacto no es válido.');
+  }
+  if (telefono && !validatePhoneNumber(telefono)) {
+    errors.push('El teléfono no es válido.');
+  }
+  if (!iban) {
+    errors.push('El IBAN es obligatorio.');
+  } else if (!validator.isIBAN(iban)) {
+    errors.push('El IBAN no es válido.');
+  }
+  errors.push(...validateDocuments());
+  return errors;
+}
+
+function collectSupplierData() {
+  const tipoVia = document.getElementById('tipo_via')?.value.trim();
+  const direccionValue = document.getElementById('direccion')?.value.trim();
+  const postal = document.getElementById('codigo_postal')?.value.trim();
+  const provincia = getProvinceFromPostalCode(postal);
+  const normalizedDireccion = normalizeAddress(direccionValue);
+  if (document.getElementById('direccion')) {
+    document.getElementById('direccion').value = normalizedDireccion;
+  }
+  return {
+    razon_social: document.getElementById('razon_social')?.value.trim(),
+    nombre_comercial: document.getElementById('nombre_comercial')?.value.trim(),
+    nif: normalizeNif(document.getElementById('nif')?.value.trim()),
+    actividad: document.getElementById('actividad')?.value.trim(),
+    tipo_via: tipoVia,
+    direccion: `${tipoVia} ${normalizedDireccion}`.trim(),
+    codigo_postal: postal,
+    provincia,
+    ciudad: document.getElementById('ciudad')?.value.trim(),
+    pais_residencia_fiscal: document.getElementById('pais_residencia_fiscal')?.value.trim(),
+    persona_contacto: document.getElementById('persona_contacto')?.value.trim(),
+    email_contacto: document.getElementById('email_contacto')?.value.trim(),
+    telefono: document.getElementById('telefono')?.value.trim(),
+    iban: document.getElementById('iban')?.value.trim(),
+    swift: document.getElementById('swift')?.value.trim(),
+    banco: document.getElementById('banco')?.value.trim(),
+    sucursal: document.getElementById('sucursal')?.value.trim(),
+    codigo_entidad: document.getElementById('codigo_entidad')?.value.trim(),
+    codigo_sucursal: document.getElementById('codigo_sucursal')?.value.trim(),
+    moneda_pago: document.getElementById('moneda_pago')?.value || 'EUR',
+    alta_036: document.getElementById('alta_036')?.value === 'true'
+  };
+}
+
 async function saveDraft() { await saveSupplierData(false); }
 
 async function saveSupplierData(submit = false) {
   if (!window.token) { showToast('Sesión no iniciada.', 'error'); return; }
-  const fields = ['razon_social','nombre_comercial','nif','actividad','direccion','codigo_postal',
-                  'ciudad','persona_contacto','email_contacto','telefono','iban','banco'];
-  const required = ['razon_social','nif','direccion','persona_contacto','email_contacto','iban'];
-  const body = {};
-  let valid = true;
-
-  fields.forEach(f => {
-    const el = document.getElementById(f);
-    if (el && el.value.trim()) body[f] = el.value.trim();
-    if (required.includes(f) && (!el || !el.value.trim())) {
-      valid = false;
-      if (el) el.classList.add('is-invalid');
-    } else if (el) {
-      el.classList.remove('is-invalid');
-    }
-  });
-
-  if (submit && !valid) {
-    showToast('Completa los campos obligatorios marcados con *', 'error');
+  const errors = validateFormFields();
+  if (submit && errors.length) {
+    showToast(errors.join(' '), 'error');
     return;
   }
 
+  if (submit) {
+    const altaEl = document.getElementById('alta_036');
+    if (!altaEl || altaEl.value === 'none') {
+      openAltaModal();
+      showToast('Responde si estás dado de alta en Hacienda antes de enviar.', 'error');
+      return;
+    }
+  }
+
+  if (errors.length) {
+    showToast(errors.join(' '), 'error');
+    return;
+  }
+
+  const body = collectSupplierData();
   const btn = document.getElementById('submitFormBtn');
   if (btn) btn.disabled = true;
 
@@ -208,6 +603,12 @@ async function submitDocumentUpload() {
   const errors = [];
 
   if (!typeEl || !typeEl.value) errors.push('Selecciona un tipo de documento.');
+  if (typeEl && typeEl.value && !DOC_TYPES.includes(typeEl.value)) {
+    errors.push('El tipo de documento no es válido.');
+  }
+  if (typeEl && typeEl.value && !DOC_TYPES.includes(typeEl.value)) {
+    errors.push('El tipo de documento no es válido.');
+  }
   if (!fileEl || !fileEl.files.length) errors.push('Selecciona un fichero para subir.');
   if (typeEl && typeEl.value === 'Otro' && labelEl && !labelEl.value.trim()) {
     errors.push('Escribe un nombre visible para el documento.');
@@ -333,8 +734,23 @@ function setActiveTab(index) {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  loadSupplierData();
+function handlePostalCodeChange() {
+  const postalEl = document.getElementById('codigo_postal');
+  const provinciaEl = document.getElementById('provincia');
+  if (!postalEl || !provinciaEl) return;
+  
+  const postal = postalEl.value.trim();
+  if (!validator || !validator.isPostalCode(postal, 'ES')) return;
+  
+  const provincia = CP_PROVINCES[postal.slice(0, 2)];
+  if (provincia && provinciaEl) {
+    provinciaEl.value = provincia;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadBankCodes();
+  await loadSupplierData();
 
   // Botón cancelar: vuelve al perfil correcto según si somos admin o proveedor
   const cancelBtn = document.getElementById('cancelEditBtn');
@@ -358,6 +774,15 @@ document.addEventListener('DOMContentLoaded', () => {
       await saveSupplierData(true);
     });
   }
+
+  const nifEl = document.getElementById('nif');
+  if (nifEl) nifEl.addEventListener('blur', handleNifBlur);
+
+  const ibanEl = document.getElementById('iban');
+  if (ibanEl) ibanEl.addEventListener('blur', () => extractIbanData().catch(e => console.error('IBAN extraction error', e)));
+
+  const postalEl = document.getElementById('codigo_postal');
+  if (postalEl) postalEl.addEventListener('blur', handlePostalCodeChange);
 
   const typeSelect = document.getElementById('documentType');
   if (typeSelect) typeSelect.addEventListener('change', onDocumentTypeChange);

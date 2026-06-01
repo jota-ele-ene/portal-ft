@@ -108,9 +108,9 @@ function isTokenRevoked(jti) {
 }
 
 const ALLOWED_FIELDS = [
-  'razon_social','nombre_comercial','nif','actividad','direccion',
-  'codigo_postal','ciudad','persona_contacto','email_contacto',
-  'telefono','iban','banco'
+  'razon_social','nombre_comercial','nif','actividad','tipo_via','direccion',
+  'codigo_postal','provincia','ciudad','pais_residencia_fiscal','persona_contacto','email_contacto',
+  'telefono','iban','swift','banco','sucursal','codigo_entidad','codigo_sucursal','moneda_pago','alta_036'
 ];
 
 // responsible_email solo editable por admin

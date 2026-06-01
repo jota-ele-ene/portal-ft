@@ -5,6 +5,7 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
+const fs      = require('fs/promises');
 
 const app  = express();
 const PORT = process.env.PORT || 8000;
@@ -14,6 +15,13 @@ const MAX_SIZE_MB = parseInt(process.env.MAX_FILE_SIZE_MB || '10');
 app.use(cors());
 app.use(express.json({ limit: `${MAX_SIZE_MB * 2}mb` }));
 app.use(express.urlencoded({ limit: `${MAX_SIZE_MB * 2}mb`, extended: true }));
+
+// ── Frontend estático ────────────────────────────────────────────────
+const STATIC_DIR = process.env.STATIC_DIR || path.join(__dirname, 'static');
+const DATA_DIR = path.join(__dirname, 'data');
+
+app.use('/static', express.static(STATIC_DIR));
+app.use('/data', express.static(DATA_DIR));
 
 // ── Configuración de vistas (EJS) ─────────────────────────────────────
 app.set('views', path.join(__dirname, 'views')); // carpeta views/
@@ -27,11 +35,6 @@ const archivosService = require('./services/archivos/server');
 app.use(authService);
 app.use(gestionService);
 app.use(archivosService);
-
-// ── Frontend estático ────────────────────────────────────────────────
-const STATIC_DIR = process.env.STATIC_DIR || path.join(__dirname, 'static');
-
-app.use('/static', express.static(STATIC_DIR));
 
 // ── Rutas de páginas (render EJS) ────────────────────────────────────
 app.get('/', (req, res) => {
@@ -51,25 +54,27 @@ app.get('/proveedores', (req, res) => {
 
 // Rutas sin parámetro: uso propio del proveedor autenticado
 app.get('/perfil-edit', (req, res) => {
-  res.render('perfil-edit', { title: 'Portal electrónico - Editar perfil', supplierId: null });
+  res.render('perfil-edit', { title: 'Portal electrónico - Editar perfil', supplierId: null, mode: 'edit' });
 });
 
 app.get('/perfil', (req, res) => {
-  res.render('perfil', { title: 'Portal electrónico - Perfil de proveedores', supplierId: null });
+  res.render('perfil', { title: 'Portal electrónico - Perfil de proveedores', supplierId: null, mode: 'view' });
 });
 
 // Rutas con :id → el administrador ve/edita el perfil de un proveedor concreto
 app.get('/perfil/:id', (req, res) => {
   res.render('perfil', {
     title: 'Portal electrónico - Perfil de proveedor',
-    supplierId: req.params.id
+    supplierId: req.params.id,
+    mode: 'view'
   });
 });
 
 app.get('/perfil-edit/:id', (req, res) => {
   res.render('perfil-edit', {
     title: 'Portal electrónico - Editar proveedor',
-    supplierId: req.params.id
+    supplierId: req.params.id,
+    mode: 'edit'
   });
 });
 
@@ -77,6 +82,106 @@ app.get('/perfil-edit/:id', (req, res) => {
 app.get('/health', (req, res) =>
   res.json({ status: 'ok', service: 'portal-unificado' })
 );
+
+const BDE_ENTITIES_PATH = path.join(DATA_DIR, 'bde_entities.json');
+let bdeEntityCache = {
+  timestamp: 0,
+  data: null
+};
+
+async function loadBankEntityData() {
+  const now = Date.now();
+  if (bdeEntityCache.data && now - bdeEntityCache.timestamp < 24 * 60 * 60 * 1000) {
+    return bdeEntityCache.data;
+  }
+
+  try {
+    const content = await fs.readFile(BDE_ENTITIES_PATH, 'utf-8');
+    const rows = JSON.parse(content);
+    const mapping = {};
+    rows.forEach(row => {
+      if (!row || !row.codigo) return;
+      mapping[row.codigo] = { name: row.nombre || '', bic: row.bic || '' };
+    });
+    bdeEntityCache = {
+      timestamp: now,
+      data: mapping
+    };
+    return mapping;
+  } catch (error) {
+    console.error('loadBankEntityData error', error);
+    bdeEntityCache = {
+      timestamp: now,
+      data: {}
+    };
+    return {};
+  }
+}
+
+app.get('/bank-entity', async (req, res) => {
+  const bankCode = req.query.code;
+  if (!bankCode) {
+    return res.status(400).json({ detail: 'El código de entidad es requerido.' });
+  }
+
+  try {
+    const data = await loadBankEntityData();
+    const entity = data[bankCode];
+    return res.json({
+      name: entity ? entity.name : '',
+      bic: entity ? entity.bic : ''
+    });
+  } catch (error) {
+    console.error('bank-entity error', error);
+    return res.status(500).json({ detail: 'Error cargando datos de entidades bancarias.' });
+  }
+});
+
+app.get('/branch-address', async (req, res) => {
+  const entidad = req.query.entidad;
+  const sucursal = req.query.sucursal;
+  if (!entidad || !sucursal) {
+    return res.status(400).json({ detail: 'Entidad y sucursal son requeridos.' });
+  }
+
+  try {
+    const baseUrl = 'http://www.sucursalesbancarias.info/';
+    const homeRes = await fetch(baseUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Accept': 'text/html'
+      }
+    });
+    const cookies = homeRes.headers.get('set-cookie') || '';
+    const homeHtml = await homeRes.text();
+    const tokenMatch = homeHtml.match(/id="form__token"[^>]*value="([^"]+)"/);
+    const token = tokenMatch ? tokenMatch[1] : '';
+
+    const body = new URLSearchParams();
+    body.append('form[entidad]', entidad);
+    body.append('form[sucursal]', sucursal);
+    body.append('form[buscar]', 'Buscar');
+    if (token) body.append('form[_token]', token);
+
+    const postRes = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Accept': 'text/html',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Cookie': cookies
+      },
+      body: body.toString()
+    });
+    const resultHtml = await postRes.text();
+    const addressMatch = resultHtml.match(/var\s+mapa\s*=\s*"([^"]+)"/);
+    const address = addressMatch ? addressMatch[1].trim() : '';
+    return res.json({ address });
+  } catch (error) {
+    console.error('branch-address error', error);
+    return res.status(500).json({ detail: 'Error consultando la dirección de la sucursal.' });
+  }
+});
 
 // Fallback opcional: si entras a una ruta desconocida, te llevo al login
 app.get('*', (req, res) => {

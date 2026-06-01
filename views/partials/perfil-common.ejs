@@ -1,0 +1,286 @@
+<%
+  const _sid = typeof supplierId !== 'undefined' && supplierId ? supplierId : null;
+  const isEdit = mode === 'edit';
+  const headerTitle = isEdit ? 'Editar perfil de proveedor' : 'Mi perfil de proveedor';
+  const headerDescription = isEdit
+    ? 'Completa la información en cada pestaña y guarda el borrador o envía para revisión.'
+    : 'Esta es la información de que disponemos en tu ficha de proveedor. <br>Revísala y edítala cuando necesites actualizarla.';
+%>
+<section class="step active" id="step-form">
+  <div style="display:flex;justify-content:flex-start;align-items:center;margin:.5rem">
+    <div>
+      <h1><%= headerTitle %></h1>
+      <p style="color:var(--text-muted);font-size:.9rem;margin-top:.25rem"><%- headerDescription %></p>
+      <% if (!isEdit) { %>
+      <p style="color: var(--text-inverse);font-size: .8rem;margin-top:.25rem;background: var(--text-faint);width: fit-content;border-radius: 1em;padding: 0 1em;">Última actualización: <span id="summary_updatedAt"></span></p>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="tabs" style="gap:.25rem;margin-bottom:.75rem;max-width:920px;margin:0 auto;padding-left: 1em;">
+    <button type="button" class="tab active" data-tab="tab-fiscal">Datos de la empresa</button>
+    <button type="button" class="tab" data-tab="tab-contacto">Datos de contacto</button>
+    <button type="button" class="tab" data-tab="tab-bancario">Datos bancarios</button>
+    <button type="button" class="tab" data-tab="tab-docs">Documentos</button>
+  </div>
+
+  <% if (isEdit) { %>
+  <form id="supplierForm" novalidate>
+    <input type="hidden" id="alta_036" name="alta_036" value="none">
+  <% } %>
+
+  <div id="tab-fiscal" class="card tab-panel active" style="max-width:920px;margin:0 auto;padding:1rem">
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label" for="razon_social">Nombre o razón social<% if (isEdit) { %> <span style="color:var(--error)">*</span><% } %></label>
+        <% if (isEdit) { %>
+          <input class="form-control" type="text" id="razon_social" name="razon_social" required>
+        <% } else { %>
+          <div class="form-read" id="summary_razon_social">—</div>
+        <% } %>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="nif">CIF / NIF / NIE<% if (isEdit) { %> <span style="color:var(--error)">*</span><% } %></label>
+        <% if (isEdit) { %>
+          <input class="form-control" type="text" id="nif" name="nif" placeholder="B12345678" required>
+        <% } else { %>
+          <div class="form-read" id="summary_nif">—</div>
+        <% } %>
+      </div>
+      <div class="form-group" style="grid-column:1/-1;display:grid;grid-template-columns:200px minmax(0,1fr);gap:.75rem;align-items:start;">
+        <div>
+          <label class="form-label" for="tipo_via">Tipo de vía<% if (isEdit) { %> <span style="color:var(--error)">*</span><% } %></label>
+          <% if (isEdit) { %>
+            <select class="form-control" id="tipo_via" name="tipo_via" required>
+              <option value="">Seleccionar tipo de vía</option>
+              <option>Calle</option>
+              <option>Avenida</option>
+              <option>Paseo</option>
+              <option>Plaza</option>
+              <option>Camino</option>
+              <option>Travesía</option>
+              <option>Carretera</option>
+              <option>Urbanización</option>
+              <option>Ronda</option>
+            </select>
+          <% } else { %>
+            <div class="form-read" id="summary_tipo_via">—</div>
+          <% } %>
+        </div>
+        <div>
+          <label class="form-label" for="direccion">Nombre de la vía y número<% if (isEdit) { %> <span style="color:var(--error)">*</span><% } %></label>
+          <% if (isEdit) { %>
+            <input class="form-control" type="text" id="direccion" name="direccion" placeholder="Ej: Mayor, 15 o Avenida de América, S/N" required>
+          <% } else { %>
+            <div class="form-read" id="summary_direccion">—</div>
+          <% } %>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="codigo_postal">Código postal <span style="color:var(--error)">*</span></label>
+        <% if (isEdit) { %>
+          <input class="form-control" type="text" id="codigo_postal" name="codigo_postal" placeholder="28001">
+        <% } else { %>
+          <div class="form-read" id="summary_codigo_postal">—</div>
+        <% } %>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="ciudad">Ciudad <span style="color:var(--error)">*</span></label>
+        <% if (isEdit) { %>
+          <input class="form-control" type="text" id="ciudad" name="ciudad">
+        <% } else { %>
+          <div class="form-read" id="summary_ciudad">—</div>
+        <% } %>
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label class="form-label" for="pais_residencia_fiscal">País de residencia fiscal<% if (isEdit) { %> <span style="color:var(--error)">*</span><% } %></label>
+        <% if (isEdit) { %>
+          <input class="form-control" type="text" id="pais_residencia_fiscal" name="pais_residencia_fiscal" placeholder="España" required>
+        <% } else { %>
+          <div class="form-read" id="summary_pais_residencia_fiscal">—</div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-contacto" class="card tab-panel" style="max-width:920px;margin:0 auto;padding:1rem">
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label" for="persona_contacto">Nombre del interlocutor<% if (isEdit) { %> <span style="color:var(--error)">*</span><% } %></label>
+        <% if (isEdit) { %>
+          <input class="form-control" type="text" id="persona_contacto" name="persona_contacto" required>
+        <% } else { %>
+          <div class="form-read" id="summary_persona_contacto">—</div>
+        <% } %>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="email_contacto">Email de contacto<% if (isEdit) { %> <span style="color:var(--error)">*</span><% } %></label>
+        <% if (isEdit) { %>
+          <input class="form-control" type="email" id="email_contacto" name="email_contacto" required>
+        <% } else { %>
+          <div class="form-read" id="summary_email_contacto">—</div>
+        <% } %>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="telefono">Teléfono</label>
+        <% if (isEdit) { %>
+          <input class="form-control" type="tel" id="telefono" name="telefono" placeholder="+34 600 000 000">
+        <% } else { %>
+          <div class="form-read" id="summary_telefono">—</div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-bancario" class="card tab-panel" style="max-width:920px;margin:0 auto;padding:1rem">
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label" for="iban">IBAN<% if (isEdit) { %> <span style="color:var(--error)">*</span><% } %></label>
+        <% if (isEdit) { %>
+          <input class="form-control" type="text" id="iban" name="iban" placeholder="ES00 0000 0000 0000 0000 0000" required>
+        <% } else { %>
+          <div class="form-read" id="summary_iban">—</div>
+        <% } %>
+      </div>
+      <% if (isEdit) { %>
+        <input type="hidden" id="codigo_entidad" name="codigo_entidad">
+        <input type="hidden" id="codigo_sucursal" name="codigo_sucursal">
+      <% } %>
+      <div class="form-group">
+        <label class="form-label" for="swift">SWIFT</label>
+        <% if (isEdit) { %>
+          <input class="form-control" type="text" id="swift" name="swift" placeholder="AUTATAT2XXX" readonly>
+        <% } else { %>
+          <div class="form-read" id="summary_swift">—</div>
+        <% } %>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="banco">Entidad bancaria</label>
+        <% if (isEdit) { %>
+          <input class="form-control" type="text" id="banco" name="banco">
+        <% } else { %>
+          <div class="form-read" id="summary_banco">—</div>
+        <% } %>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="sucursal">Sucursal</label>
+        <% if (isEdit) { %>
+          <input class="form-control" type="text" id="sucursal" name="sucursal">
+        <% } else { %>
+          <div class="form-read" id="summary_sucursal">—</div>
+        <% } %>
+      </div>
+      <div class="form-group" style="grid-column:1/-1;">
+        <label class="form-label">Dirección de sucursal</label>
+        <div class="form-read" id="branchAddressResult">—</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="moneda_pago">Moneda de pago<% if (isEdit) { %> <span style="color:var(--error)">*</span><% } %></label>
+        <% if (isEdit) { %>
+          <select class="form-control" id="moneda_pago" name="moneda_pago" required>
+            <option value="EUR">EUR - Euro</option>
+            <option value="USD">USD - Dólar estadounidense</option>
+            <option value="GBP">GBP - Libra esterlina</option>
+            <option value="CHF">CHF - Franco suizo</option>
+            <option value="JPY">JPY - Yen japonés</option>
+            <option value="CAD">CAD - Dólar canadiense</option>
+            <option value="AUD">AUD - Dólar australiano</option>
+            <option value="SEK">SEK - Corona sueca</option>
+            <option value="NOK">NOK - Corona noruega</option>
+            <option value="DKK">DKK - Corona danesa</option>
+            <option value="CNY">CNY - Yuan chino</option>
+            <option value="INR">INR - Rupia india</option>
+            <option value="BRL">BRL - Real brasileño</option>
+            <option value="MXN">MXN - Peso mexicano</option>
+            <option value="ZAR">ZAR - Rand sudafricano</option>
+          </select>
+        <% } else { %>
+          <div class="form-read" id="summary_moneda_pago">—</div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-docs" class="card tab-panel" style="max-width:920px;margin:0 auto;padding:1rem">
+    <% if (isEdit) { %>
+      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">Sube documentos con su tipo. El nombre personalizado se verá en la lista de archivos.</p>
+      <button type="button" class="btn btn-secondary" onclick="openUploadModal()">Subir documento</button>
+      <div id="uploadedDocs" style="margin-top:1rem"></div>
+    <% } else { %>
+      <div style="display:grid;gap:.75rem">
+        <div class="form-group">
+          <label class="form-label">Estado de la documentación</label>
+          <div class="form-read" id="summary_docs">—</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Documentos adjuntos</label>
+          <div class="form-read" id="summary_files">No hay archivos cargados.</div>
+        </div>
+      </div>
+    <% } %>
+  </div>
+
+  <% if (isEdit) { %>
+    <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1rem">
+      <button type="button" class="btn btn-secondary" id="cancelEditBtn">Cancelar</button>
+      <button type="button" class="btn btn-secondary" onclick="saveDraft()">Guardar borrador</button>
+      <button type="submit" class="btn btn-primary" id="submitFormBtn">Enviar para revisión</button>
+    </div>
+
+    <div id="uploadModal" class="modal" inert>
+      <div class="modal-backdrop" onclick="closeUploadModal()"></div>
+      <div class="modal-panel">
+        <h1>Subir documento</h1>
+        <p style="color:var(--text-muted);margin:.5rem 0 1rem 0">Elige el tipo de documento y un nombre visible.</p>
+        <div class="form-group">
+          <label class="form-label" for="documentType">Tipo de documento</label>
+          <select class="form-control" id="documentType">
+            <option value="">Seleccionar tipo</option>
+            <option>Certificado de titularidad bancaria</option>
+            <option>Copia del modelo 036/037 donde conste el epígrafe de IAE</option>
+            <option>Otro</option>
+          </select>
+        </div>
+        <div class="form-group" id="customLabelGroup" style="display:none;">
+          <label class="form-label" for="documentLabel">Nombre visible</label>
+          <input class="form-control" type="text" id="documentLabel" placeholder="Escribe un nombre corto">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="documentFile">Fichero</label>
+          <input class="form-control" type="file" id="documentFile" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:.75rem;margin-top:1rem">
+          <button type="button" class="btn btn-secondary" onclick="closeUploadModal()">Cerrar</button>
+          <button type="button" class="btn btn-primary" onclick="submitDocumentUpload()">Subir</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="altaModal" class="modal" inert>
+      <div class="modal-backdrop" onclick="closeAltaModal()"></div>
+      <div class="modal-panel">
+        <h1>¿Estás dado de alta en Hacienda (modelo 036/037)?</h1>
+        <div class="form-group" style="display:flex;flex-direction: row!important;gap:1rem;align-items:center;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:.5rem;font-size: smaller;font-size: 1rem;margin: 1em;"><input type="radio" name="altaHacienda" value="si"> Sí</label>
+          <label style="display:flex;align-items:center;gap:.5rem;font-size: smaller;font-size: 1rem;margin: 1em;"><input type="radio" name="altaHacienda" value="no"> No</label>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:.75rem;margin-top:1rem">
+          <button type="button" class="btn btn-secondary" onclick="closeAltaModal()">Cerrar</button>
+          <button type="button" class="btn btn-primary" onclick="submitAltaModal()">Enviar</button>
+        </div>
+      </div>
+    </div>
+  <% } else { %>
+    <div style="display:flex;justify-content:flex-end;max-width:920px;margin:1rem auto 0">
+      <button class="btn btn-primary" id="editProfileBtn">Editar</button>
+    </div>
+  <% } %>
+
+  <% if (isEdit) { %>
+  </form>
+  <% } %>
+
+  <script>
+    window.SUPPLIER_ID = <%= JSON.stringify(_sid) %>;
+  </script>
+</section>

@@ -37,14 +37,20 @@
         summary_nombre_comercial: data.nombre_comercial,
         summary_nif: data.nif,
         summary_actividad: data.actividad,
+        summary_tipo_via: data.tipo_via,
         summary_direccion: data.direccion,
         summary_codigo_postal: data.codigo_postal,
         summary_ciudad: data.ciudad,
+        summary_pais_residencia_fiscal: data.pais_residencia_fiscal,
         summary_persona_contacto: data.persona_contacto,
         summary_email_contacto: data.email_contacto,
         summary_telefono: data.telefono,
         summary_iban: data.iban,
+        summary_swift: data.swift,
         summary_banco: data.banco,
+        summary_sucursal: data.sucursal,
+        summary_moneda_pago: data.moneda_pago || 'EUR',
+        summary_updatedAt: new Date(data.updated_at).toLocaleString('es-ES', { dateStyle: 'long' }),
         summary_docs: (currentProfile.documents && currentProfile.documents.length) ? 'Subidos' : 'Pendiente',
         summary_files: (currentProfile.documents && currentProfile.documents.length)
           ? currentProfile.documents.map(doc => {
@@ -63,6 +69,15 @@
           el.textContent = value || '—';
         }
       });
+      if (data.codigo_entidad && data.codigo_sucursal) {
+        const addressEl = document.getElementById('branchAddressResult');
+        if (addressEl) {
+          fetch(`/branch-address?entidad=${encodeURIComponent(data.codigo_entidad)}&sucursal=${encodeURIComponent(data.codigo_sucursal)}`)
+            .then(res => res.ok ? res.json() : Promise.reject())
+            .then(json => { addressEl.textContent = json.address || 'No disponible'; })
+            .catch(() => { addressEl.textContent = 'No disponible'; });
+        }
+      }
     } catch (e) {
       console.error('fetchProfile error', e);
       window.location.href = supplierId ? '/proveedores' : '/perfil-edit';
