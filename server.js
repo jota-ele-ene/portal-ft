@@ -183,6 +183,67 @@ app.get('/branch-address', async (req, res) => {
   }
 });
 
+const CP_CITY_PATH = path.join(DATA_DIR, 'cp_city.json');
+
+let cpCityCache = {
+  timestamp: 0,
+  data: null
+};
+
+async function loadPostalCityData() {
+  const now = Date.now();
+  if (cpCityCache.data && now - cpCityCache.timestamp < 24 * 60 * 60 * 1000) {
+    return cpCityCache.data;
+  }
+
+  try {
+    const content = await fs.readFile(CP_CITY_PATH, 'utf-8');
+    const rows = JSON.parse(content);
+    const mapping = {};
+    rows.forEach(row => {
+      if (!row || !row.cp) return;
+      mapping[row.cp] = {
+        ciudad: row.ciudad || '',
+        provincia: row.provincia || ''
+      };
+    });
+    cpCityCache = {
+      timestamp: now,
+      data: mapping
+    };
+    return mapping;
+  } catch (error) {
+    console.error('loadPostalCityData error', error);
+    cpCityCache = {
+      timestamp: now,
+      data: {}
+    };
+    return {};
+  }
+}
+
+app.get('/postal-info', async (req, res) => {
+  const cp = (req.query.cp || '').trim();
+  if (!cp) {
+    return res.status(400).json({ detail: 'El código postal es requerido.' });
+  }
+
+  try {
+    const data = await loadPostalCityData();
+    const entry = data[cp];
+    if (!entry) {
+      return res.json({ ciudad: '', provincia: '' });
+    }
+    return res.json({
+      ciudad: entry.ciudad || '',
+      provincia: entry.provincia || ''
+    });
+  } catch (error) {
+    console.error('postal-info error', error);
+    return res.status(500).json({ detail: 'Error cargando datos de códigos postales.' });
+  }
+});
+
 // Fallback opcional: si entras a una ruta desconocida, te llevo al login
 app.get('*', (req, res) => {
   res.render('404', { title: 'Portal electrónico - Upsss!!!!' });

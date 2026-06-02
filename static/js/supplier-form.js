@@ -725,17 +725,48 @@ function setActiveTab(index) {
   }
 }
 
-function handlePostalCodeChange() {
+async function handlePostalCodeChange() {
   const postalEl = document.getElementById('codigo_postal');
   const provinciaEl = document.getElementById('provincia');
-  if (!postalEl || !provinciaEl) return;
-  
+  const ciudadEl = document.getElementById('ciudad');
+
+  if (!postalEl) return;
+
   const postal = postalEl.value.trim();
-  if (!validator || !validator.isPostalCode(postal, 'ES')) return;
-  
-  const provincia = CP_PROVINCES[postal.slice(0, 2)];
-  if (provincia && provinciaEl) {
-    provinciaEl.value = provincia;
+  if (!postal) return;
+
+  if (!validator || !validator.isPostalCode(postal, 'ES')) {
+    return;
+  }
+
+  const provinciaPorPrefijo = CP_PROVINCES[postal.slice(0, 2)];
+  if (provinciaEl && provinciaPorPrefijo && !provinciaEl.value.trim()) {
+    provinciaEl.value = provinciaPorPrefijo;
+  }
+
+  try {
+    const res = await fetch(`/postal-info?cp=${encodeURIComponent(postal)}`);
+    if (!res.ok) {
+      return;
+    }
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      console.error('postal-info devolvió contenido no JSON:', contentType);
+      return;
+    }
+
+    const data = await res.json();
+
+    if (provinciaEl && data.provincia && !provinciaEl.value.trim()) {
+      provinciaEl.value = data.provincia;
+    }
+
+    if (ciudadEl && data.ciudad && !ciudadEl.value.trim()) {
+      ciudadEl.value = data.ciudad;
+    }
+  } catch (e) {
+    console.error('handlePostalCodeChange error', e);
   }
 }
 
