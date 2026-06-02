@@ -9,6 +9,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/app.css">
   <link rel="stylesheet" href="/static/css/style-ft.css">
+  <% if (typeof styles !== 'undefined' && styles.length) { %>
+    <% styles.forEach(function(href) { %>
+      <link rel="stylesheet" href="<%= href %>">
+    <% }) %>
+  <% } %>
 </head>
 <body style="overflow: auto!important;">
 

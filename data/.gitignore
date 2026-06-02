@@ -1,0 +1,6 @@
+# data/.gitignore
+*
+!cp_city.json
+!bank_codes.json
+!/.gitignore
+!roles_routes.json

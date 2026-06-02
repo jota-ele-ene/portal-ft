@@ -9,6 +9,8 @@ window.token = window.token || sessionStorage.getItem('portal_token') || null;
 const supplierId = window.SUPPLIER_ID || null;
 
 const currentProfile = { documents: [] };
+
+// Constantes y cachés para datos relacionados con direcciones, bancos y documentos
 const VALID_VIA_TYPES = ['Calle','Avenida','Paseo','Plaza','Camino','Travesía','Carretera','Urbanización','Ronda'];
 const DOC_TYPES = [
   'Certificado de titularidad bancaria',
@@ -480,7 +482,7 @@ function collectSupplierData() {
     nif: normalizeNif(document.getElementById('nif')?.value.trim()),
     actividad: document.getElementById('actividad')?.value.trim(),
     tipo_via: tipoVia,
-    direccion: `${tipoVia} ${normalizedDireccion}`.trim(),
+    direccion: `${normalizedDireccion}`.trim(),
     codigo_postal: postal,
     provincia,
     ciudad: document.getElementById('ciudad')?.value.trim(),
@@ -730,23 +732,35 @@ async function handlePostalCodeChange() {
   const provinciaEl = document.getElementById('provincia');
   const ciudadEl = document.getElementById('ciudad');
 
-  if (!postalEl) return;
-
-  const postal = postalEl.value.trim();
-  if (!postal) return;
-
-  if (!validator || !validator.isPostalCode(postal, 'ES')) {
+  if (!postalEl) {
+    console.warn('handlePostalCodeChange: no se encontró el input codigo_postal');
     return;
   }
 
-  const provinciaPorPrefijo = CP_PROVINCES[postal.slice(0, 2)];
-  if (provinciaEl && provinciaPorPrefijo && !provinciaEl.value.trim()) {
-    provinciaEl.value = provinciaPorPrefijo;
+  const postal = postalEl.value.trim();
+  if (!postal) {
+    console.warn('handlePostalCodeChange: codigo_postal vacío');
+    return;
+  }
+
+  // Validación básica: CP español 5 dígitos
+  if (!validator || !validator.isPostalCode(postal, 'ES')) {
+    console.warn('handlePostalCodeChange: codigo_postal no válido', postal);
+    return;
+  }
+
+  // Mantener comportamiento previo: deducir provincia por prefijo si tienes CP_PROVINCES
+  if (typeof CP_PROVINCES !== 'undefined') {
+    const provinciaPorPrefijo = CP_PROVINCES[postal.slice(0, 2)];
+    if (provinciaEl && provinciaPorPrefijo && !provinciaEl.value.trim()) {
+      provinciaEl.value = provinciaPorPrefijo;
+    }
   }
 
   try {
     const res = await fetch(`/postal-info?cp=${encodeURIComponent(postal)}`);
     if (!res.ok) {
+      console.error('handlePostalCodeChange: respuesta no OK de /postal-info', res.status);
       return;
     }
 
@@ -758,11 +772,11 @@ async function handlePostalCodeChange() {
 
     const data = await res.json();
 
-    if (provinciaEl && data.provincia && !provinciaEl.value.trim()) {
+    if (provinciaEl && data.provincia) {
       provinciaEl.value = data.provincia;
     }
 
-    if (ciudadEl && data.ciudad && !ciudadEl.value.trim()) {
+    if (ciudadEl && data.ciudad) {
       ciudadEl.value = data.ciudad;
     }
   } catch (e) {
@@ -803,8 +817,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   const ibanEl = document.getElementById('iban');
   if (ibanEl) ibanEl.addEventListener('blur', () => extractIbanData().catch(e => console.error('IBAN extraction error', e)));
 
+  
   const postalEl = document.getElementById('codigo_postal');
-  if (postalEl) postalEl.addEventListener('blur', handlePostalCodeChange);
+  if (postalEl) {
+    postalEl.addEventListener('blur', handlePostalCodeChange);
+    // Opcional: también al cambiar mientras teclea
+    postalEl.addEventListener('change', handlePostalCodeChange);
+  }
+
+  // Inicializar el input de teléfono con intl-tel-input y configurar opciones para España y países preferidos
+  const input = document.querySelector('#telefono');
+    if (!input) return;
+  const iti = window.intlTelInput(input, {
+    initialCountry: 'es',
+    preferredCountries: ['es', 'pt', 'fr', 'it', 'gb'],
+    separateDialCode: true,
+    nationalMode: false,
+    strictMode: true
+  });
 
   const typeSelect = document.getElementById('documentType');
   if (typeSelect) typeSelect.addEventListener('change', onDocumentTypeChange);

@@ -123,10 +123,20 @@
       </div>
       <div class="form-group">
         <label class="form-label" for="telefono">Teléfono</label>
+
         <% if (isEdit) { %>
-          <input class="form-control" type="tel" id="telefono" name="telefono" placeholder="+34 600 000 000">
+          <input
+            class="form-control"
+            type="tel"
+            id="telefono"
+            name="telefono"
+            placeholder="600 000 000"
+            autocomplete="tel"
+          >
+          <input type="hidden" id="telefono_full" name="telefono_full">
+          <small class="form-help" id="telefono_error" style="display:none;"></small>
         <% } else { %>
-          <div class="form-read" id="summary_telefono">—</div>
+          <div class="form-read phone-read" id="summary_telefono">—</div>
         <% } %>
       </div>
     </div>

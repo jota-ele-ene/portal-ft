@@ -8,8 +8,13 @@
   includeMain: function() {
     return include('partials/perfil-common', { mode: modeValue, supplierId: supplierId });
   },
+    styles: [
+    'https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css',
+    '/static/css/supplier-phone.css'
+  ],
   scripts: [
     'https://cdnjs.cloudflare.com/ajax/libs/validator/13.9.0/validator.min.js',
+    'https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/js/intlTelInputWithUtils.js',
     scriptSrc
   ]
 }) %>
