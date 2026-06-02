@@ -529,6 +529,11 @@ async function saveSupplierData(submit = false) {
   const btn = document.getElementById('submitFormBtn');
   if (btn) btn.disabled = true;
 
+  // Mostrar pestaña de carga (solo en envío final, no en borrador)
+  if (submit && typeof showSendingTab === 'function') {
+    showSendingTab();
+  }
+
   try {
     const res = await fetch(profileUrl(), {
       method: 'PUT', headers: { 'Authorization': 'Bearer ' + window.token, 'Content-Type': 'application/json' },
@@ -540,12 +545,21 @@ async function saveSupplierData(submit = false) {
     }
     const saved = await res.json();
     updateStatusBadges(saved);
+
+    if (submit && typeof hideSendingTab === 'function') {
+      hideSendingTab();
+    }
+
     showToast(
       submit ? '¡Datos guardados correctamente!' : 'Borrador guardado.',
       'success',
       submit ? () => window.location.href = cancelUrl() : null
     );
   } catch (e) {
+    // En caso de error, ocultar la pestaña de carga y volver al formulario
+    if (submit && typeof hideSendingTab === 'function') {
+      hideSendingTab();
+    }
     showToast(e.message || 'Error al guardar.', 'error');
   } finally {
     if (btn) btn.disabled = false;
@@ -717,10 +731,13 @@ async function deleteDocument(filename) {
 }
 
 function setActiveTab(index) {
-  const tabs = Array.from(document.querySelectorAll('.tabs .tab'));
-  const panels = Array.from(document.querySelectorAll('.tab-panel'));
+  const tabs = Array.from(document.querySelectorAll('.tabs .tab:not(.tab-sending)'));
+  const panels = Array.from(document.querySelectorAll('.tab-panel:not(#tab-sending)'));
   tabs.forEach((tab, idx) => tab.classList.toggle('active', idx === index));
-  panels.forEach((panel, idx) => panel.classList.toggle('active', idx === index));
+  panels.forEach((panel, idx) => {
+    panel.classList.toggle('active', idx === index);
+    panel.style.display = idx === index ? '' : 'none';
+  });
   const submitBtn = document.getElementById('submitFormBtn');
   if (submitBtn) {
     submitBtn.textContent = index === panels.length - 1 ? 'Enviar para revisión' : 'Siguiente';
@@ -793,8 +810,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (cancelBtn) cancelBtn.addEventListener('click', () => window.location.href = cancelUrl());
 
   const form = document.getElementById('supplierForm');
-  const tabs = Array.from(document.querySelectorAll('.tabs .tab'));
-  const panels = Array.from(document.querySelectorAll('.tab-panel'));
+  const tabs = Array.from(document.querySelectorAll('.tabs .tab:not(.tab-sending)'));
+  const panels = Array.from(document.querySelectorAll('.tab-panel:not(#tab-sending)'));
 
   tabs.forEach((tab, idx) => tab.addEventListener('click', () => setActiveTab(idx)));
 

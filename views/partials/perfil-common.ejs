@@ -22,6 +22,10 @@
     <button type="button" class="tab" data-tab="tab-contacto">Datos de contacto</button>
     <button type="button" class="tab" data-tab="tab-bancario">Datos bancarios</button>
     <button type="button" class="tab" data-tab="tab-docs">Documentos</button>
+    <% if (isEdit) { %>
+    <!-- Pestaña oculta de progreso: se activa mediante JS al enviar el formulario -->
+    <button type="button" class="tab tab-sending" data-tab="tab-sending" style="display:none;" aria-hidden="true" tabindex="-1">Enviando…</button>
+    <% } %>
   </div>
 
   <% if (isEdit) { %>
@@ -231,7 +235,29 @@
   </div>
 
   <% if (isEdit) { %>
-    <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1rem">
+  <!-- Panel oculto de progreso: se muestra mientras se envían los datos al microservicio -->
+  <div id="tab-sending" class="card tab-panel tab-panel-sending" style="max-width:920px;margin:0 auto;padding:2.5rem 1rem;display:none;text-align:center;">
+    <div class="sending-icon" style="margin:0 auto 1.25rem;width:56px;height:56px;">
+      <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="28" cy="28" r="24" stroke="var(--border,#d4d1ca)" stroke-width="4"/>
+        <circle cx="28" cy="28" r="24" stroke="var(--primary,#01696f)" stroke-width="4"
+          stroke-dasharray="150.8" stroke-dashoffset="100"
+          stroke-linecap="round" transform="rotate(-90 28 28)">
+          <animateTransform attributeName="transform" type="rotate"
+            from="-90 28 28" to="270 28 28" dur="1.2s" repeatCount="indefinite"/>
+        </circle>
+      </svg>
+    </div>
+    <h2 style="font-size:1.15rem;font-weight:600;margin-bottom:.5rem;color:var(--text,#28251d)">Actualizando datos del perfil en nuestros sistemas</h2>
+    <p style="color:var(--text-muted,#7a7974);font-size:.9rem;max-width:38ch;margin:0 auto">Por favor, espera un momento. No cierres ni recargues esta página.</p>
+    <div class="progress-bar-wrap" style="margin:1.5rem auto 0;max-width:320px;height:6px;border-radius:99px;background:var(--border,#d4d1ca);overflow:hidden;">
+      <div id="sendingProgressBar" style="height:100%;width:0%;border-radius:99px;background:var(--primary,#01696f);transition:width .4s ease;"></div>
+    </div>
+  </div>
+  <% } %>
+
+  <% if (isEdit) { %>
+    <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1rem" id="formActions">
       <button type="button" class="btn btn-secondary" id="cancelEditBtn">Cancelar</button>
       <button type="button" class="btn btn-secondary" onclick="saveDraft()">Guardar borrador</button>
       <button type="submit" class="btn btn-primary" id="submitFormBtn">Enviar para revisión</button>
@@ -292,5 +318,76 @@
 
   <script>
     window.SUPPLIER_ID = <%= JSON.stringify(_sid) %>;
+
+    /**
+     * showSendingTab() — muestra la pestaña oculta de progreso y anima la barra.
+     * Llamar ANTES de lanzar el fetch al microservicio.
+     */
+    function showSendingTab() {
+      // Ocultar acciones del formulario
+      const actions = document.getElementById('formActions');
+      if (actions) actions.style.display = 'none';
+
+      // Ocultar todos los paneles de pestañas visibles
+      document.querySelectorAll('.tab-panel').forEach(p => {
+        p.classList.remove('active');
+        p.style.display = 'none';
+      });
+
+      // Mostrar pestaña «Enviando…» en la barra de pestañas
+      const sendingTab = document.querySelector('.tab-sending');
+      if (sendingTab) {
+        sendingTab.style.display = 'inline-flex';
+        sendingTab.classList.add('active');
+      }
+      document.querySelectorAll('.tabs .tab:not(.tab-sending)').forEach(t => t.classList.remove('active'));
+
+      // Mostrar panel de progreso
+      const panel = document.getElementById('tab-sending');
+      if (panel) {
+        panel.style.display = 'block';
+        panel.classList.add('active');
+      }
+
+      // Animar barra de progreso
+      animateSendingBar();
+    }
+
+    function animateSendingBar() {
+      const bar = document.getElementById('sendingProgressBar');
+      if (!bar) return;
+      bar.style.width = '0%';
+      // Avanza hasta el 85 % de forma fluida; el último tramo lo completa hideSendingTab
+      const steps = [
+        { w: '15%', delay: 100 },
+        { w: '35%', delay: 400 },
+        { w: '55%', delay: 900 },
+        { w: '75%', delay: 1600 },
+        { w: '85%', delay: 2400 }
+      ];
+      steps.forEach(({ w, delay }) => setTimeout(() => { bar.style.width = w; }, delay));
+    }
+
+    /**
+     * hideSendingTab() — completa la barra al 100 % y restaura la vista.
+     * Llamar tras recibir respuesta del microservicio (éxito o error).
+     */
+    function hideSendingTab() {
+      const bar = document.getElementById('sendingProgressBar');
+      if (bar) bar.style.width = '100%';
+      setTimeout(() => {
+        const panel = document.getElementById('tab-sending');
+        if (panel) { panel.style.display = 'none'; panel.classList.remove('active'); }
+        const sendingTab = document.querySelector('.tab-sending');
+        if (sendingTab) { sendingTab.style.display = 'none'; sendingTab.classList.remove('active'); }
+        const actions = document.getElementById('formActions');
+        if (actions) actions.style.display = '';
+        // Volver a la pestaña de documentos (la última del flujo normal)
+        if (typeof setActiveTab === 'function') {
+          const panels = Array.from(document.querySelectorAll('.tab-panel:not(#tab-sending)'));
+          setActiveTab(panels.length - 1);
+        }
+      }, 500);
+    }
   </script>
 </section>

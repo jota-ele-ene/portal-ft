@@ -4,20 +4,21 @@
  * Microservicio Gestión — Puerto 8002
  *
  * GET    /suppliers/me                    → perfil del proveedor autenticado
- * PUT    /suppliers/me                    → actualiza perfil
+ * PUT    /suppliers/me                    → actualiza perfil (+ envía correo al responsable)
  * GET    /suppliers/admin/list            → lista todos (solo admin)
  * GET    /suppliers/admin/:id             → detalle de un proveedor (solo admin)
- * PUT    /suppliers/admin/:id             → edita un proveedor (solo admin)
+ * PUT    /suppliers/admin/:id             → edita un proveedor (solo admin, + correo)
  * PATCH  /suppliers/admin/:id/status      → cambia estado (solo admin)
  * GET    /health
  */
 
-const express = require('express');
-const cors    = require('cors');
-const jwt     = require('jsonwebtoken');
-const fs      = require('fs');
-const path    = require('path');
-const crypto  = require('crypto');
+const express  = require('express');
+const cors     = require('cors');
+const jwt      = require('jsonwebtoken');
+const fs       = require('fs');
+const path     = require('path');
+const crypto   = require('crypto');
+const nodemailer = require('nodemailer');
 
 const app  = express();
 const PORT = process.env.PORT || 8002;
@@ -29,6 +30,66 @@ const SECRET_KEY   = process.env.JWT_SECRET       || 'cambia-este-secreto-en-pro
 const DATA_PATH    = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
 const AUTH_DB_PATH = path.join(DATA_PATH, 'auth.json');
 const DB_PATH      = process.env.GESTION_DB_PATH || path.join(DATA_PATH, 'suppliers.json');
+
+// ── Plantillas de correo ───────────────────────────────────────────────────────
+const TEMPLATES_PATH = path.join(__dirname, 'email-templates');
+
+function loadEmailTemplate(name) {
+  const file = path.join(TEMPLATES_PATH, `${name}.json`);
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) {
+    console.error(`[gestion] No se pudo cargar plantilla '${name}':`, e.message);
+    return null;
+  }
+}
+
+function renderTemplate(template, data) {
+  let subject = template.subject || '';
+  let html    = template.html    || '';
+  let text    = template.text    || '';
+  const replacer = (str) =>
+    str.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+      const val = data[key];
+      if (val === undefined || val === null) return '';
+      if (typeof val === 'boolean') return val ? 'Sí' : 'No';
+      return String(val);
+    });
+  return { subject: replacer(subject), html: replacer(html), text: replacer(text) };
+}
+
+// ── Mailer ─────────────────────────────────────────────────────────────────────
+function createTransport() {
+  return nodemailer.createTransport({
+    host:   process.env.SMTP_HOST   || 'localhost',
+    port:   Number(process.env.SMTP_PORT)   || 1025,
+    secure: process.env.SMTP_SECURE === 'true',
+    auth:   (process.env.SMTP_USER && process.env.SMTP_PASS)
+              ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+              : undefined
+  });
+}
+
+async function sendResponsibleEmail(supplier) {
+  const to = supplier.responsible_email ||
+             process.env.DEFAULT_RESPONSIBLE_EMAIL;
+  if (!to) {
+    console.warn('[gestion] sendResponsibleEmail: no hay responsible_email ni DEFAULT_RESPONSIBLE_EMAIL configurado.');
+    return;
+  }
+  const tpl = loadEmailTemplate('perfil-actualizado');
+  if (!tpl) return;
+  const { subject, html, text } = renderTemplate(tpl, supplier);
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'portal@empresa.local';
+  try {
+    const transport = createTransport();
+    await transport.sendMail({ from, to, subject, html, text });
+    console.log(`[gestion] Correo enviado a ${to} para proveedor ${supplier.id}`);
+  } catch (e) {
+    // No interrumpimos el flujo si el correo falla
+    console.error('[gestion] Error enviando correo de notificación:', e.message);
+  }
+}
 
 // ── JSON store ─────────────────────────────────────────────────────────────────
 function loadDB() {
@@ -46,7 +107,6 @@ function loadDB() {
 function saveDB(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
 }
-
 
 function authenticate(req, res, next) {
   const auth = req.headers.authorization;
@@ -128,7 +188,7 @@ app.get('/suppliers/me', authenticate, (req, res) => {
   res.json(s);
 });
 
-app.put('/suppliers/me', authenticate, (req, res) => {
+app.put('/suppliers/me', authenticate, async (req, res) => {
   const db    = loadDB();
   const email = req.user.sub;
   let s       = db.suppliers.find(x => x.email === email);
@@ -157,6 +217,10 @@ app.put('/suppliers/me', authenticate, (req, res) => {
 
   if (hasMinimum(s) && s.status === 'pendiente') s.status = 'revision';
   saveDB(db);
+
+  // Enviar notificación al responsable de forma asíncrona (no bloquea la respuesta)
+  sendResponsibleEmail(s).catch(e => console.error('[gestion] sendResponsibleEmail error:', e.message));
+
   res.json(s);
 });
 
@@ -174,7 +238,7 @@ app.get('/suppliers/admin/:id', authenticate, requireAdmin, (req, res) => {
 });
 
 // PUT /suppliers/admin/:id — edita el perfil de un proveedor concreto (solo admin)
-app.put('/suppliers/admin/:id', authenticate, requireAdmin, (req, res) => {
+app.put('/suppliers/admin/:id', authenticate, requireAdmin, async (req, res) => {
   const db = loadDB();
   const s  = db.suppliers.find(x => x.id === req.params.id);
   if (!s) return res.status(404).json({ detail: 'Proveedor no encontrado.' });
@@ -197,6 +261,10 @@ app.put('/suppliers/admin/:id', authenticate, requireAdmin, (req, res) => {
 
   if (hasMinimum(s) && s.status === 'pendiente') s.status = 'revision';
   saveDB(db);
+
+  // Enviar notificación al responsable de forma asíncrona
+  sendResponsibleEmail(s).catch(e => console.error('[gestion] sendResponsibleEmail error:', e.message));
+
   res.json(s);
 });
 
