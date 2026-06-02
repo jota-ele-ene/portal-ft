@@ -5,10 +5,13 @@ window.APP_BASE = '';
 window.API = window.__API_BASE__ || '';
 window.token = window.token || sessionStorage.getItem('portal_token') || null;
 
+
 // SUPPLIER_ID se inyecta desde la vista EJS cuando el admin edita un proveedor concreto
 const supplierId = window.SUPPLIER_ID || null;
 
+
 const currentProfile = { documents: [] };
+
 
 // Constantes y cachés para datos relacionados con direcciones, bancos y documentos
 const VALID_VIA_TYPES = ['Calle','Avenida','Paseo','Plaza','Camino','Travesía','Carretera','Urbanización','Ronda'];
@@ -27,18 +30,53 @@ const CP_PROVINCES = {
   '50':'Zaragoza','51':'Ceuta','52':'Melilla'
 };
 
-  if (!window.token) {
+
+if (!window.token) {
   window.location.href = '/';
 }
 
+
+// ── Helpers para el overlay de progreso ──────────────────────────────────────
+let _barInterval = null;
+
+function showOverlay() {
+  const overlay = document.getElementById('overlay-actualizando');
+  const barFill  = document.getElementById('bar-fill-actualizando');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  if (barFill) {
+    let pct = 0;
+    barFill.style.width = '0%';
+    _barInterval = setInterval(() => {
+      if (pct < 80) { pct += Math.random() * 8; barFill.style.width = Math.min(pct, 80) + '%'; }
+    }, 250);
+  }
+}
+
+function hideOverlay(success = true) {
+  clearInterval(_barInterval);
+  _barInterval = null;
+  const overlay = document.getElementById('overlay-actualizando');
+  const barFill  = document.getElementById('bar-fill-actualizando');
+  if (barFill) barFill.style.width = success ? '100%' : '0%';
+  // Breve pausa para que el usuario vea el 100 % antes de ocultar
+  setTimeout(() => {
+    if (overlay) overlay.style.display = 'none';
+    if (barFill) barFill.style.width = '0%';
+  }, success ? 600 : 0);
+}
+
+
 // Caché en memoria de entidades bancarias consultadas durante la sesión
 const BANK_CODES = {};
+
 
 // loadBankCodes ya no descarga un fichero estático (que no existe).
 // La caché se rellena bajo demanda en fetchBankEntity().
 async function loadBankCodes() {
   // No-op: mantenemos la firma para no cambiar el DOMContentLoaded listener.
 }
+
 
 // Consulta el endpoint /bank-entity y almacena el resultado en caché.
 async function fetchBankEntity(bankCode) {
@@ -57,6 +95,7 @@ async function fetchBankEntity(bankCode) {
   return null;
 }
 
+
 async function getBankTextFromCode(bankCode) {
   if (!bankCode) return '';
   const entity = await fetchBankEntity(bankCode);
@@ -64,16 +103,19 @@ async function getBankTextFromCode(bankCode) {
   return `Entidad ${bankCode}`;
 }
 
+
 function getBranchTextFromCode(branchCode) {
   if (!branchCode) return '';
   return `Sucursal ${branchCode}`;
 }
+
 
 async function getSwiftFromCode(bankCode) {
   if (!bankCode) return '';
   const entity = await fetchBankEntity(bankCode);
   return (entity && entity.swift) ? entity.swift : '';
 }
+
 
 // Extraer datos del IBAN
 async function extractIbanData() {
@@ -82,7 +124,7 @@ async function extractIbanData() {
   const bancoEl = document.getElementById('banco');
   const sucursalEl = document.getElementById('sucursal');
   if (!ibanEl || !swiftEl) return;
-  
+
   const iban = ibanEl.value.trim().toUpperCase().replace(/\s+/g, '');
   const codigoEntidadEl = document.getElementById('codigo_entidad');
   const codigoSucursalEl = document.getElementById('codigo_sucursal');
@@ -96,7 +138,7 @@ async function extractIbanData() {
     if (branchAddressEl) branchAddressEl.textContent = 'No disponible';
     return;
   }
-  
+
   // El IBAN español tiene formato: CC DD BBBB SSSS CCCCCCCCCC
   // CC = país, DD = dígitos de control, BBBB = código banco, SSSS = sucursal
   const countryCode = iban.substring(0, 2);
@@ -118,29 +160,17 @@ async function extractIbanData() {
   const branchText = getBranchTextFromCode(branchCode);
 
   swiftEl.value = swift;
-
-  if (bancoEl) {
-    bancoEl.value = bankText;
-  }
-  if (sucursalEl) {
-    sucursalEl.value = branchText;
-  }
-  if (codigoEntidadEl) {
-    codigoEntidadEl.value = bankCode;
-  }
-  if (codigoSucursalEl) {
-    codigoSucursalEl.value = branchCode;
-  }
+  if (bancoEl) bancoEl.value = bankText;
+  if (sucursalEl) sucursalEl.value = branchText;
+  if (codigoEntidadEl) codigoEntidadEl.value = bankCode;
+  if (codigoSucursalEl) codigoSucursalEl.value = branchCode;
   if (branchAddressEl && bankCode && branchCode) {
     fetchBranchAddress(bankCode, branchCode)
-      .then(address => {
-        branchAddressEl.textContent = address || 'No disponible';
-      })
-      .catch(() => {
-        branchAddressEl.textContent = 'No disponible';
-      });
+      .then(address => { branchAddressEl.textContent = address || 'No disponible'; })
+      .catch(() => { branchAddressEl.textContent = 'No disponible'; });
   }
 }
+
 
 async function fetchBranchAddress(entidad, sucursal) {
   if (!entidad || !sucursal) return '';
@@ -155,6 +185,7 @@ async function fetchBranchAddress(entidad, sucursal) {
   }
 }
 
+
 // Devuelve la URL de API correcta según si somos admin editando otro proveedor o el propio
 function profileUrl() {
   return supplierId
@@ -162,10 +193,12 @@ function profileUrl() {
     : `/suppliers/me`;
 }
 
+
 // URL a la que navegar al cancelar
 function cancelUrl() {
   return supplierId ? `/perfil/${supplierId}` : '/perfil';
 }
+
 
 async function loadSupplierData() {
   if (!window.token) return;
@@ -201,7 +234,6 @@ async function loadSupplierData() {
       dirEl.value = parsed.direccion;
     }
     if (data.iban) {
-      // Completar texto de banco y sucursal basado en el IBAN
       await extractIbanData();
     }
     const altaEl = document.getElementById('alta_036');
@@ -215,6 +247,7 @@ async function loadSupplierData() {
     console.error('Error loading profile', error);
   }
 }
+
 
 function renderUploadedDocs(documents) {
   const container = document.getElementById('uploadedDocs');
@@ -248,6 +281,7 @@ function renderUploadedDocs(documents) {
   setBadge('statusDocs', documents.length ? 'aprobado' : 'pendiente');
 }
 
+
 async function openDocument(filename) {
   if (!filename || !window.token) return;
   try {
@@ -268,12 +302,14 @@ async function openDocument(filename) {
   }
 }
 
+
 function updateStatusBadges(data) {
   if (data.razon_social && data.nif && data.direccion) setBadge('statusFiscal','aprobado');
   if (data.persona_contacto && data.email_contacto) setBadge('statusContacto','aprobado');
   if (data.iban) setBadge('statusBancario','aprobado');
   setBadge('statusDocs', (Array.isArray(data.documents) && data.documents.length) ? 'aprobado' : 'pendiente');
 }
+
 
 function setBadge(id, status) {
   const el = document.getElementById(id);
@@ -283,9 +319,11 @@ function setBadge(id, status) {
   el.textContent = labels[status] || status;
 }
 
+
 function normalizeNif(value) {
   return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
+
 
 function isValidNifNieCif(value) {
   const input = normalizeNif(value);
@@ -326,11 +364,13 @@ function isValidNifNieCif(value) {
   return false;
 }
 
+
 function getProvinceFromPostalCode(cp) {
   const postal = String(cp || '').trim();
   if (!validator || !validator.isPostalCode(postal, 'ES')) return null;
   return CP_PROVINCES[postal.slice(0, 2)] || null;
 }
+
 
 function parseAddressString(full) {
   const address = String(full || '').trim();
@@ -342,6 +382,7 @@ function parseAddressString(full) {
   return { tipo: '', direccion: address };
 }
 
+
 function normalizeAddress(value) {
   const original = String(value || '').trim();
   if (!original) return '';
@@ -350,12 +391,14 @@ function normalizeAddress(value) {
   return original.replace(/\,*\s*$/, '') + ', S/N';
 }
 
+
 function validatePhoneNumber(value) {
   const phone = String(value || '').trim();
   if (!phone) return true;
   const normalized = phone.replace(/[\s()+-\.]/g, '');
   return /^\+?\d{9,15}$/.test(normalized);
 }
+
 
 function validateDocuments() {
   const docs = currentProfile.documents || [];
@@ -378,6 +421,7 @@ function validateDocuments() {
   return errors;
 }
 
+
 function openAltaModal() {
   const modal = document.getElementById('altaModal');
   if (!modal) return;
@@ -385,12 +429,14 @@ function openAltaModal() {
   modal.removeAttribute('inert');
 }
 
+
 function closeAltaModal() {
   const modal = document.getElementById('altaModal');
   if (!modal) return;
   modal.style.display = 'none';
   modal.setAttribute('inert', '');
 }
+
 
 function submitAltaModal() {
   const selected = document.querySelector('input[name="altaHacienda"]:checked');
@@ -405,6 +451,7 @@ function submitAltaModal() {
   showToast('Respuesta registrada.', 'success');
 }
 
+
 function handleNifBlur() {
   const nifEl = document.getElementById('nif');
   const altaEl = document.getElementById('alta_036');
@@ -414,6 +461,7 @@ function handleNifBlur() {
     openAltaModal();
   }
 }
+
 
 function validateFormFields() {
   const errors = [];
@@ -467,6 +515,7 @@ function validateFormFields() {
   return errors;
 }
 
+
 function collectSupplierData() {
   const tipoVia = document.getElementById('tipo_via')?.value.trim();
   const direccionValue = document.getElementById('direccion')?.value.trim();
@@ -501,7 +550,9 @@ function collectSupplierData() {
   };
 }
 
+
 async function saveDraft() { await saveSupplierData(false); }
+
 
 async function saveSupplierData(submit = false) {
   if (!window.token) { showToast('Sesión no iniciada.', 'error'); return; }
@@ -529,6 +580,9 @@ async function saveSupplierData(submit = false) {
   const btn = document.getElementById('submitFormBtn');
   if (btn) btn.disabled = true;
 
+  // ── Mostrar overlay solo en el envío final (último paso) ──────────────
+  if (submit) showOverlay();
+
   try {
     const res = await fetch(profileUrl(), {
       method: 'PUT', headers: { 'Authorization': 'Bearer ' + window.token, 'Content-Type': 'application/json' },
@@ -540,17 +594,21 @@ async function saveSupplierData(submit = false) {
     }
     const saved = await res.json();
     updateStatusBadges(saved);
-    showToast(
-      submit ? '¡Datos guardados correctamente!' : 'Borrador guardado.',
-      'success',
-      submit ? () => window.location.href = cancelUrl() : null
-    );
+    if (submit) {
+      hideOverlay(true);
+      // Navegar tras la pausa de 600 ms que ya gestiona hideOverlay internamente
+      setTimeout(() => window.location.href = cancelUrl(), 700);
+    } else {
+      showToast('Borrador guardado.', 'success');
+    }
   } catch (e) {
+    if (submit) hideOverlay(false);
     showToast(e.message || 'Error al guardar.', 'error');
   } finally {
     if (btn) btn.disabled = false;
   }
 }
+
 
 function showToast(msg, type = '', onHide) {
   const t = document.getElementById('toast');
@@ -564,6 +622,7 @@ function showToast(msg, type = '', onHide) {
   }, 4000);
 }
 
+
 function openUploadModal() {
   const modal = document.getElementById('uploadModal');
   if (!modal) return;
@@ -575,12 +634,14 @@ function openUploadModal() {
   document.getElementById('customLabelGroup').style.display = 'none';
 }
 
+
 function closeUploadModal() {
   const modal = document.getElementById('uploadModal');
   if (!modal) return;
   modal.style.display = 'none';
   modal.setAttribute('inert', '');
 }
+
 
 function onDocumentTypeChange() {
   const type = document.getElementById('documentType').value;
@@ -589,6 +650,7 @@ function onDocumentTypeChange() {
   custom.style.display = type === 'Otro' ? 'block' : 'none';
 }
 
+
 async function submitDocumentUpload() {
   const typeEl = document.getElementById('documentType');
   const fileEl = document.getElementById('documentFile');
@@ -596,9 +658,6 @@ async function submitDocumentUpload() {
   const errors = [];
 
   if (!typeEl || !typeEl.value) errors.push('Selecciona un tipo de documento.');
-  if (typeEl && typeEl.value && !DOC_TYPES.includes(typeEl.value)) {
-    errors.push('El tipo de documento no es válido.');
-  }
   if (typeEl && typeEl.value && !DOC_TYPES.includes(typeEl.value)) {
     errors.push('El tipo de documento no es válido.');
   }
@@ -648,6 +707,7 @@ async function submitDocumentUpload() {
   }
 }
 
+
 async function saveDocumentMetadata(documents) {
   if (!window.token) return;
   try {
@@ -666,9 +726,11 @@ async function saveDocumentMetadata(documents) {
   }
 }
 
+
 function handleFiles(files) {
   return;
 }
+
 
 async function downloadDocument(filename) {
   if (!filename || !window.token) return;
@@ -695,6 +757,7 @@ async function downloadDocument(filename) {
   }
 }
 
+
 async function deleteDocument(filename) {
   if (!filename || !window.token) return;
   if (!confirm('¿Eliminar este documento?')) return;
@@ -716,6 +779,7 @@ async function deleteDocument(filename) {
   }
 }
 
+
 function setActiveTab(index) {
   const tabs = Array.from(document.querySelectorAll('.tabs .tab'));
   const panels = Array.from(document.querySelectorAll('.tab-panel'));
@@ -726,6 +790,7 @@ function setActiveTab(index) {
     submitBtn.textContent = index === panels.length - 1 ? 'Enviar para revisión' : 'Siguiente';
   }
 }
+
 
 async function handlePostalCodeChange() {
   const postalEl = document.getElementById('codigo_postal');
@@ -743,13 +808,11 @@ async function handlePostalCodeChange() {
     return;
   }
 
-  // Validación básica: CP español 5 dígitos
   if (!validator || !validator.isPostalCode(postal, 'ES')) {
     console.warn('handlePostalCodeChange: codigo_postal no válido', postal);
     return;
   }
 
-  // Mantener comportamiento previo: deducir provincia por prefijo si tienes CP_PROVINCES
   if (typeof CP_PROVINCES !== 'undefined') {
     const provinciaPorPrefijo = CP_PROVINCES[postal.slice(0, 2)];
     if (provinciaEl && provinciaPorPrefijo && !provinciaEl.value.trim()) {
@@ -771,24 +834,18 @@ async function handlePostalCodeChange() {
     }
 
     const data = await res.json();
-
-    if (provinciaEl && data.provincia) {
-      provinciaEl.value = data.provincia;
-    }
-
-    if (ciudadEl && data.ciudad) {
-      ciudadEl.value = data.ciudad;
-    }
+    if (provinciaEl && data.provincia) provinciaEl.value = data.provincia;
+    if (ciudadEl && data.ciudad) ciudadEl.value = data.ciudad;
   } catch (e) {
     console.error('handlePostalCodeChange error', e);
   }
 }
 
+
 document.addEventListener('DOMContentLoaded', async () => {
   await loadBankCodes();
   await loadSupplierData();
 
-  // Botón cancelar: vuelve al perfil correcto según si somos admin o proveedor
   const cancelBtn = document.getElementById('cancelEditBtn');
   if (cancelBtn) cancelBtn.addEventListener('click', () => window.location.href = cancelUrl());
 
@@ -807,6 +864,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         setActiveTab(activeIndex + 1);
         return;
       }
+      // Último paso: saveSupplierData mostrará el overlay internamente
       await saveSupplierData(true);
     });
   }
@@ -817,17 +875,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const ibanEl = document.getElementById('iban');
   if (ibanEl) ibanEl.addEventListener('blur', () => extractIbanData().catch(e => console.error('IBAN extraction error', e)));
 
-  
   const postalEl = document.getElementById('codigo_postal');
   if (postalEl) {
     postalEl.addEventListener('blur', handlePostalCodeChange);
-    // Opcional: también al cambiar mientras teclea
     postalEl.addEventListener('change', handlePostalCodeChange);
   }
 
-  // Inicializar el input de teléfono con intl-tel-input y configurar opciones para España y países preferidos
   const input = document.querySelector('#telefono');
-    if (!input) return;
+  if (!input) return;
   const iti = window.intlTelInput(input, {
     initialCountry: 'es',
     preferredCountries: ['es', 'pt', 'fr', 'it', 'gb'],

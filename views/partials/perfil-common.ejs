@@ -230,6 +230,25 @@
     <% } %>
   </div>
 
+  <!-- ── Pestaña oculta: "Actualizando datos" ─────────────────────────── -->
+  <div id="overlay-actualizando" style="display:none"
+      class="overlay-actualizando"
+      role="status" aria-live="polite" aria-label="Actualizando datos del perfil">
+    <div class="overlay-actualizando__box">
+      <svg class="overlay-actualizando__spinner" viewBox="0 0 50 50" aria-hidden="true">
+        <circle cx="25" cy="25" r="20" fill="none" stroke="currentColor"
+                stroke-width="4" stroke-linecap="round"
+                stroke-dasharray="94.2" stroke-dashoffset="60"/>
+      </svg>
+      <p class="overlay-actualizando__msg">Actualizando datos del perfil en nuestros sistemas</p>
+      <div class="overlay-actualizando__bar-track" role="progressbar"
+          aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+          aria-label="Progreso de actualización">
+        <div class="overlay-actualizando__bar-fill" id="bar-fill-actualizando"></div>
+      </div>
+    </div>
+  </div>
+
   <% if (isEdit) { %>
     <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1rem">
       <button type="button" class="btn btn-secondary" id="cancelEditBtn">Cancelar</button>
