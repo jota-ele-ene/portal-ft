@@ -585,9 +585,6 @@ async function saveSupplierData(submit = false) {
     showSendingTab();
   }
 
-  // ── Mostrar overlay solo en el envío final (último paso) ──────────────
-  if (submit) showOverlay();
-
   try {
     const res = await fetch(profileUrl(), {
       method: 'PUT', headers: { 'Authorization': 'Bearer ' + window.token, 'Content-Type': 'application/json' },
