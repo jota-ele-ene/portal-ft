@@ -164,7 +164,7 @@ function filterTable() {
     allSuppliers.filter(s => {
       const matchQ =
         !q ||
-        (s.razon_social || '').toLowerCase().includes(q) ||
+        (s.alias || '').toLowerCase().includes(q) ||
         (s.nif || '').toLowerCase().includes(q) ||
         (s.email || '').toLowerCase().includes(q) ||
         (s.responsible_email || '').toLowerCase().includes(q);
@@ -194,7 +194,7 @@ function renderTable(suppliers) {
 
   tbody.innerHTML = suppliers
     .map(s => {
-      const nombre = s.razon_social || s.nombre_comercial || s.email || '—';
+      const nombre = s.alias || s.razon_social || s.nombre_comercial || s.email || '—';
       const responsable = s.responsible_email || '—';
       const status  = s.status || 'pendiente';
       const fecha   = s.updated_at ? new Date(s.updated_at).toLocaleDateString('es-ES') : '—';

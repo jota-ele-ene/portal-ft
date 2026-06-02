@@ -410,7 +410,7 @@ app.post('/auth/invite', authenticate, requireAdmin, async (req, res) => {
     if (!supplier) {
       supplier = {
         id:                crypto.randomUUID(),
-        razon_social:      name ? name.trim() : '',
+        alias:      name ? name.trim() : '',
         email_contacto:             emailLower,
         status:            'pendiente',
         responsible_email: responsibleEmail,

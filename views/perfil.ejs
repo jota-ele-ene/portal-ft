@@ -2,11 +2,18 @@
   const modeValue = typeof mode !== 'undefined' ? mode : 'view';
   const isEdit = modeValue === 'edit';
   const scriptSrc = isEdit ? '/static/js/supplier-form.js' : '/static/js/supplier-view.js';
+  const viewUser = typeof user !== 'undefined'
+    ? user
+    : (typeof locals !== 'undefined' ? locals.user : null);
 %>
 <%- include('layout', {
   title: title,
   includeMain: function() {
-    return include('partials/perfil-common', { mode: modeValue, supplierId: supplierId });
+    return include('partials/perfil-common', {
+      mode: modeValue,
+      supplierId: supplierId,
+      user: viewUser
+    });
   },
     styles: [
     'https://cdn.jsdelivr.net/npm/intl-tel-input@25.3.1/build/css/intlTelInput.css',

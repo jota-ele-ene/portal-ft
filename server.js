@@ -36,6 +36,11 @@ app.use(authService);
 app.use(gestionService);
 app.use(archivosService);
 
+app.use((req, res, next) => {
+  res.locals.user = req.user || null;
+  next();
+});
+
 // ── Rutas de páginas (render EJS) ────────────────────────────────────
 app.get('/', (req, res) => {
   res.render('login-email', {
@@ -66,6 +71,7 @@ app.get('/perfil/:id', (req, res) => {
   res.render('perfil', {
     title: 'Portal electrónico - Perfil de proveedor',
     supplierId: req.params.id,
+    user: req.user || res.locals.user || null, 
     mode: 'view'
   });
 });

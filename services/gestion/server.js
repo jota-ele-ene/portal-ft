@@ -71,22 +71,74 @@ function createTransport() {
 }
 
 async function sendResponsibleEmail(supplier) {
-  const to = supplier.responsible_email ||
-             process.env.DEFAULT_RESPONSIBLE_EMAIL;
+  const to = supplier.responsible_email || process.env.DEFAULT_RESPONSIBLE_EMAIL;
   if (!to) {
     console.warn('[gestion] sendResponsibleEmail: no hay responsible_email ni DEFAULT_RESPONSIBLE_EMAIL configurado.');
     return;
   }
+
   const tpl = loadEmailTemplate('perfil-actualizado');
   if (!tpl) return;
-  const { subject, html, text } = renderTemplate(tpl, supplier);
+
+  const supplierDocsDir = path.join(DATA_PATH, 'documents', supplier.id || '');
+  const docs = Array.isArray(supplier.documents) ? supplier.documents : [];
+
+  const document_names = docs.length
+    ? docs.map(doc => doc.label || doc.type || doc.original || doc.filename).join(', ')
+    : 'Sin documentos adjuntos';
+
+  const document_rows_html = docs.length
+    ? docs.map(doc => {
+        const label = doc.label || doc.type || doc.original || doc.filename;
+        const original = doc.original || doc.filename || '';
+        const uploaded = doc.uploaded_at || '';
+        return `<tr>
+          <td style="padding:.5rem;border-bottom:1px solid #eee;color:#666;width:40%">Documento</td>
+          <td style="padding:.5rem;border-bottom:1px solid #eee">${label} <span style="color:#666">(${original}${uploaded ? `, ${uploaded}` : ''})</span></td>
+        </tr>`;
+      }).join('')
+    : `<tr>
+        <td style="padding:.5rem;border-bottom:1px solid #eee;color:#666;width:40%">Documentos</td>
+        <td style="padding:.5rem;border-bottom:1px solid #eee">Sin documentos adjuntos</td>
+      </tr>`;
+
+  const document_rows_text = docs.length
+    ? docs.map(doc => {
+        const label = doc.label || doc.type || doc.original || doc.filename;
+        const original = doc.original || doc.filename || '';
+        const uploaded = doc.uploaded_at || '';
+        return `- ${label}${original ? ` (${original}` : ''}${uploaded ? `${original ? ', ' : ' ('}${uploaded}` : ''}${original || uploaded ? ')' : ''}`;
+      }).join('\n')
+    : '- Sin documentos adjuntos';
+
+  const templateData = {
+    ...supplier,
+    document_names,
+    document_rows_html,
+    document_rows_text
+  };
+
+  const { subject, html, text } = renderTemplate(tpl, templateData);
   const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'portal@empresa.local';
+
+  const attachments = docs
+    .map(doc => {
+      const filename = doc.filename;
+      if (!filename) return null;
+      const fullPath = path.join(supplierDocsDir, filename);
+      if (!fs.existsSync(fullPath)) return null;
+      return {
+        filename: doc.original || filename,
+        path: fullPath
+      };
+    })
+    .filter(Boolean);
+
   try {
     const transport = createTransport();
-    await transport.sendMail({ from, to, subject, html, text });
-    console.log(`[gestion] Correo enviado a ${to} para proveedor ${supplier.id}`);
+    await transport.sendMail({ from, to, subject, html, text, attachments });
+    console.log(`[gestion] Correo enviado a ${to} para proveedor ${supplier.id} con ${attachments.length} adjuntos`);
   } catch (e) {
-    // No interrumpimos el flujo si el correo falla
     console.error('[gestion] Error enviando correo de notificación:', e.message);
   }
 }

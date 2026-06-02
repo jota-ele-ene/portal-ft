@@ -1,11 +1,19 @@
 <%
+  const safeUser = typeof user !== 'undefined'
+    ? user
+    : (typeof locals !== 'undefined' ? locals.user : null);
+  const isAdmin = !!(safeUser && safeUser.role === 'admin');
   const _sid = typeof supplierId !== 'undefined' && supplierId ? supplierId : null;
   const isEdit = mode === 'edit';
   const headerTitle = isEdit ? 'Editar perfil de proveedor' : 'Mi perfil de proveedor';
   const headerDescription = isEdit
     ? 'Completa la información en cada pestaña y guarda el borrador o envía para revisión.'
     : 'Esta es la información de que disponemos en tu ficha de proveedor. <br>Revísala y edítala cuando necesites actualizarla.';
+  console.log('[perfil-common] user =', safeUser);
+  console.log('[perfil-common] isAdmin =', isAdmin);
 %>
+<pre><%= JSON.stringify(typeof user !== 'undefined' ? user : locals.user, null, 2) %></pre>
+
 <section class="step active" id="step-form">
   <div style="display:flex;justify-content:flex-start;align-items:center;margin:.5rem">
     <div>
@@ -326,6 +334,12 @@
       </div>
     </div>
   <% } else { %>
+    <% const isAdmin = user && user.role === 'admin'; %>
+    <div class="profile-actions">
+      <% if (isAdmin) { %>
+        <a href="/proveedores" class="btn btn-secondary">Volver</a>
+      <% } %>
+    </div>
     <div style="display:flex;justify-content:flex-end;max-width:920px;margin:1rem auto 0">
       <button class="btn btn-primary" id="editProfileBtn">Editar</button>
     </div>
@@ -336,8 +350,7 @@
   <% } %>
 
   <script>
-    window.SUPPLIER_ID = <%= JSON.stringify(_sid) %>;
-
+    window.SUPPLIER_ID = <%- JSON.stringify(supplierId || null) %>;
     /**
      * showSendingTab() — muestra la pestaña oculta de progreso y anima la barra.
      * Llamar ANTES de lanzar el fetch al microservicio.
