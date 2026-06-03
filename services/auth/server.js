@@ -34,17 +34,21 @@ const SMTP_USER    = process.env.SMTP_USER  || '';
 const SMTP_PASS    = process.env.SMTP_PASS  || '';
 const SMTP_FROM    = process.env.SMTP_FROM  || 'portal@tuempresa.com';
 const PORTAL_URL   = process.env.PORTAL_URL || `http://localhost:${PORT}`;
+
+const ADMIN_EMAIL  = (process.env.ADMIN_EMAIL || 'admin@tuempresa.com').trim().toLowerCase();
+
+
 const DATA_PATH    = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
 const DB_PATH      = process.env.AUTH_DB_PATH || path.join(DATA_PATH, 'auth.json');
 const SUPPLIERS_DB_PATH = process.env.GESTION_DB_PATH || path.join(DATA_PATH, 'suppliers.json');
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'admin@tuempresa.com')
-                      .split(',').map(e => e.trim().toLowerCase());
-const ADMIN_EMAIL  = (process.env.ADMIN_EMAIL || ADMIN_EMAILS[0] || 'admin@tuempresa.com').trim().toLowerCase();
+
+const ROLES_ROUTES_PATH = path.join(DATA_PATH, 'roles_routes.json');
 
 // ── Mapa de páginas permitidas por rol ────────────────────────────────────────
 const DEFAULT_ROLE_PAGES = {
-  admin:    ['/proveedores', '/perfil'],
-  supplier: ['/perfil', '/perfil-edit']
+  admin: ['/proveedores', '/perfil', '/perfil-edit'],
+  user: ['/proveedores', '/perfil'],
+  supplier: ['/perfil']
 };
 
 // ── Middlewares globales ──────────────────────────────────────────────────────
@@ -98,6 +102,24 @@ function saveSuppliersDB(data) {
   fs.writeFileSync(SUPPLIERS_DB_PATH, JSON.stringify(data, null, 2), 'utf8');
 }
 
+function stripJsonComments(content) {
+  return String(content || '')
+    .replace(/^\s*\/\/.*$/gm, '')
+    .replace(/\/\/.*$/gm, '');
+}
+
+function loadRoleRoutes() {
+  try {
+    if (!fs.existsSync(ROLES_ROUTES_PATH)) return DEFAULT_ROLE_PAGES;
+    const raw = fs.readFileSync(ROLES_ROUTES_PATH, 'utf8');
+    const parsed = JSON.parse(stripJsonComments(raw));
+    if (!parsed || typeof parsed !== 'object') return DEFAULT_ROLE_PAGES;
+    return parsed;
+  } catch {
+    return DEFAULT_ROLE_PAGES;
+  }
+}
+
 function isTokenRevoked(jti, db) {
   if (!jti) return false;
   const data = db || loadDB();
@@ -124,13 +146,15 @@ function revokeToken(token) {
 }
 
 // ── Helpers de rol y redirección ──────────────────────────────────────────────
-function getDefaultRedirect(db, role) {
-  const pages = (db.role_pages && db.role_pages[role]) || DEFAULT_ROLE_PAGES[role] || ['/'];
-  return Array.isArray(pages) && pages.length > 0 ? pages[0] : '/';
+function getAllowedPages(db, role) {
+  const rolesRoutes = loadRoleRoutes();
+  const pages = rolesRoutes[String(role || '').trim()] || DEFAULT_ROLE_PAGES[role] || ['/'];
+  return Array.isArray(pages) ? pages : ['/'];
 }
 
-function getAllowedPages(db, role) {
-  return (db.role_pages && db.role_pages[role]) || DEFAULT_ROLE_PAGES[role] || [];
+function getDefaultRedirect(db, role) {
+  const pages = getAllowedPages(db, role);
+  return pages[0] || '/';
 }
 
 // ── Mailer ─────────────────────────────────────────────────────────────────────
@@ -231,7 +255,6 @@ function createJWT(email, role) {
 function isAuthorizedEmail(db, email) {
   const emailLower = String(email || '').toLowerCase().trim();
   if (!emailLower) return false;
-  if (ADMIN_EMAILS.includes(emailLower) || emailLower === ADMIN_EMAIL) return true;
   return db.users.some(u => u.email === emailLower);
 }
 
@@ -392,6 +415,20 @@ app.post('/auth/otp/verify', (req, res) => {
       email: user.email,
       role: user.role
     };
+
+    return req.session.save(err => {
+      if (err) {
+        console.error('[session.save]', err);
+        return res.status(500).json({ detail: 'No se pudo iniciar la sesión.' });
+      }
+
+      return res.json({
+        ok: true,
+        role: user.role,
+        redirect_to: redirectTo,
+        allowed_pages: allowedPages
+      });
+    });
   }
 
   res.json({
@@ -400,6 +437,7 @@ app.post('/auth/otp/verify', (req, res) => {
     redirect_to: redirectTo,
     allowed_pages: allowedPages
   });
+
 });
 
 app.post('/auth/invite', authenticate, requireAdmin, async (req, res) => {

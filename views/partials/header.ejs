@@ -19,8 +19,7 @@
     const headerLogout = document.getElementById('headerLogout');
     const token = sessionStorage.getItem('portal_token');
     const email = sessionStorage.getItem('portal_email');
-
-    if (token && email) {
+    if (email) {
       if (headerUser) headerUser.style.display = 'flex';
       if (headerEmail) headerEmail.textContent = email;
       if (headerLogout) headerLogout.style.display = 'inline-flex';
@@ -33,7 +32,7 @@
           try {
             await fetch(`${apiBase}/auth/logout`, {
               method: 'POST',
-              headers: { Authorization: 'Bearer ' + token }
+              credentials: 'include'
             });
           } catch (e) {
             console.warn('Logout backend failed:', e);

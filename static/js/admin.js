@@ -57,22 +57,28 @@ function showInviteForm() {
   if (success) success.style.display = 'none';
 }
 
-async function fetchCurrentAdmin() {
+async function fetchCurrentUser() {
   const res = await fetch(`${API}/auth/me`, {
     credentials: 'include',
-    headers: {
-      Accept: 'application/json'
-    }
+    headers: { Accept: 'application/json' }
   });
 
+  const raw = await res.text();
+  console.log('/auth/me status:', res.status, 'body:', raw);
+
   if (!res.ok) {
-    throw new Error('No autenticado');
+    throw new Error(`auth/me ${res.status}`);
   }
 
-  const me = await res.json();
+  let me;
+  try {
+    me = JSON.parse(raw);
+  } catch {
+    throw new Error('auth/me no devolvió JSON');
+  }
 
-  if (!me || me.role !== 'admin') {
-    throw new Error('No autorizado');
+  if (!me || !me.role) {
+    throw new Error('auth/me sin role');
   }
 
   return me;
@@ -135,7 +141,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const adminUserArea = document.getElementById('adminUserArea');
 
   try {
-    const me = await fetchCurrentAdmin();
+    const me = await fetchCurrentUser();
     adminEmailLocal = me.email || '';
 
     if (adminUserArea && adminEmailDisplay && adminEmailLocal) {
@@ -147,8 +153,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       await loadSuppliers();
     }
   } catch (e) {
-    showToast('Sesión de administrador no válida. Vuelve a iniciar sesión.', 'error');
-    window.location.href = '/';
+      console.error('Fallo cargando sesión en /proveedores:', e);
+      showToast('No se pudo validar la sesión.', 'error');
     return;
   }
 

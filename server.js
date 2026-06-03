@@ -5,7 +5,8 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
-const fs      = require('fs/promises');
+const fs      = require('fs');
+const fsp     = require('fs/promises');
 const session = require('express-session');
 
 const app  = express();
@@ -33,6 +34,75 @@ app.use(session({
 const STATIC_DIR = process.env.STATIC_DIR || path.join(__dirname, 'static');
 const DATA_DIR = path.join(__dirname, 'data');
 
+const ROLES_ROUTES_PATH = path.join(DATA_DIR, 'roles_routes.json');
+let roleRoutesCache = { timestamp: 0, data: null };
+
+function stripJsonComments(content) {
+  return String(content || '')
+    .replace(/^\s*\/\/.*$/gm, '')
+    .replace(/\/\/.*$/gm, '');
+}
+
+function loadRoleRoutes() {
+  const now = Date.now();
+  if (roleRoutesCache.data && now - roleRoutesCache.timestamp < 60 * 1000) {
+    return roleRoutesCache.data;
+  }
+
+  try {
+    const raw = fs.readFileSync(ROLES_ROUTES_PATH, 'utf8');
+    const parsed = JSON.parse(stripJsonComments(raw));
+    roleRoutesCache = {
+      timestamp: now,
+      data: parsed && typeof parsed === 'object' ? parsed : {}
+    };
+    return roleRoutesCache.data;
+  } catch (error) {
+    console.error('loadRoleRoutes error', error);
+    roleRoutesCache = { timestamp: now, data: {} };
+    return {};
+  }
+}
+
+function getAllowedRoutesForRole(role) {
+  const routes = loadRoleRoutes();
+  const allowed = routes[String(role || '').trim()] || [];
+  return Array.isArray(allowed) ? allowed : [];
+}
+
+function getDefaultRouteForRole(role) {
+  const allowed = getAllowedRoutesForRole(role);
+  return allowed[0] || '/';
+}
+
+function redirectToAllowedHome(req, res) {
+  if (!req.user) return res.redirect('/');
+  return res.redirect(getDefaultRouteForRole(req.user.role));
+}
+
+function buildUnauthorizedRedirect(req) {
+  const fallback = getDefaultRouteForRole(req.user?.role);
+  const sep = fallback.includes('?') ? '&' : '?';
+  return `${fallback}${sep}toast=${encodeURIComponent('Página no permitida para tu usuario')}`;
+}
+
+function requireAllowedPage(req, res, next) {
+  if (!req.user) {
+    return res.redirect('/');
+  }
+
+  const allowedRoutes = getAllowedRoutesForRole(req.user.role);
+  if (!allowedRoutes.length) {
+    return res.redirect('/');
+  }
+
+  if (!allowedRoutes.includes(req.path)) {
+    return res.redirect(buildUnauthorizedRedirect(req));
+  }
+
+  next();
+}
+
 app.use('/static', express.static(STATIC_DIR));
 app.use('/data', express.static(DATA_DIR));
 
@@ -46,10 +116,7 @@ app.use((req, res, next) => {
 });
 
 function requireAuthPage(req, res, next) {
-  if (!req.user) {
-    return res.redirect('/');
-  }
-  next();
+  return requireAllowedPage(req, res, next);
 }
 
 function requireAdminPage(req, res, next) {
@@ -74,11 +141,8 @@ app.use(gestionService);
 app.use(archivosService);
 
 app.get('/', (req, res) => {
-  if (req.user?.role === 'admin') {
-    return res.redirect('/proveedores');
-  }
-  if (req.user?.role === 'supplier') {
-    return res.redirect('/perfil');
+  if (req.user) {
+    return redirectToAllowedHome(req, res);
   }
 
   res.render('login-email', {
@@ -88,18 +152,15 @@ app.get('/', (req, res) => {
 });
 
 app.get('/login', (req, res) => {
-  if (req.user?.role === 'admin') {
-    return res.redirect('/proveedores');
-  }
-  if (req.user?.role === 'supplier') {
-    return res.redirect('/perfil');
+  if (req.user) {
+    return redirectToAllowedHome(req, res);
   }
 
   res.render('login-otp', { title: 'Portal electrónico - Login' });
 });
 
-app.get('/proveedores', requireAdminPage, (req, res) => {
-  res.render('admin-proveedores', {
+app.get('/proveedores', requireAuthPage, (req, res) => {
+    res.render('admin-proveedores', {
     title: 'Portal electrónico - Administración',
     user: req.user
   });
@@ -155,7 +216,7 @@ async function loadBankEntityData() {
   }
 
   try {
-    const content = await fs.readFile(BDE_ENTITIES_PATH, 'utf-8');
+    const content = await fsp.readFile(BDE_ENTITIES_PATH, 'utf-8');
     const rows = JSON.parse(content);
     const mapping = {};
     rows.forEach(row => {
@@ -246,7 +307,7 @@ async function loadPostalCityData() {
   }
 
   try {
-    const content = await fs.readFile(CP_CITY_PATH, 'utf-8');
+    const content = await fsp.readFile(CP_CITY_PATH, 'utf-8');
     const rows = JSON.parse(content);
     const mapping = {};
     rows.forEach(row => {

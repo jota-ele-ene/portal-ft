@@ -1,6 +1,9 @@
 <%- include('layout', {
   title: 'Gestión de proveedores',
   body: `
+  <script>
+    window.CURRENT_USER = <%- JSON.stringify(user || null) %>;
+  </script>
   <section id="admin-dashboard">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
       <div>

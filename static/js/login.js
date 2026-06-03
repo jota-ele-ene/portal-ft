@@ -89,7 +89,21 @@ function startOtpTimer() {
   }, 1000);
 }
 
+function consumeServerToast() {
+  const params = new URLSearchParams(window.location.search);
+  const toast = params.get('toast');
+  if (!toast) return;
+
+  showToast(toast, 'error');
+  params.delete('toast');
+
+  const qs = params.toString();
+  const nextUrl = `${window.location.pathname}${qs ? '?' + qs : ''}${window.location.hash || ''}`;
+  window.history.replaceState({}, document.title, nextUrl);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  consumeServerToast();
   const otpSection = document.getElementById('step-otp');
 
   if (otpSection) {

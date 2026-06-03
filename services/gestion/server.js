@@ -308,19 +308,19 @@ app.put('/suppliers/me', authenticate, async (req, res) => {
   res.json(s);
 });
 
-app.get('/suppliers/admin/list', authenticate, requireAdmin, (req, res) => {
+app.get('/suppliers/admin/list', authenticate, (req, res) => {
   const db = loadDB();
   res.json({ suppliers: db.suppliers, total: db.suppliers.length });
 });
 
-app.get('/suppliers/admin/:id', authenticate, requireAdmin, (req, res) => {
+app.get('/suppliers/admin/:id', authenticate, (req, res) => {
   const db = loadDB();
   const s = db.suppliers.find(x => x.id === req.params.id);
   if (!s) return res.status(404).json({ detail: 'Proveedor no encontrado.' });
   res.json(s);
 });
 
-app.put('/suppliers/admin/:id', authenticate, requireAdmin, async (req, res) => {
+app.put('/suppliers/admin/:id', authenticate, async (req, res) => {
   const db = loadDB();
   const s = db.suppliers.find(x => x.id === req.params.id);
   if (!s) return res.status(404).json({ detail: 'Proveedor no encontrado.' });
@@ -351,7 +351,7 @@ app.put('/suppliers/admin/:id', authenticate, requireAdmin, async (req, res) => 
   res.json(s);
 });
 
-app.patch('/suppliers/admin/:id/status', authenticate, requireAdmin, (req, res) => {
+app.patch('/suppliers/admin/:id/status', authenticate, (req, res) => {
   const { status } = req.body;
 
   if (!VALID_STATUSES.has(status)) {
