@@ -51,7 +51,7 @@ async function sendOtp(isResend = false) {
 
     sessionStorage.setItem('portal_email', email);
 
-    if (isResend) showToast('Nuevo código enviado.', 'success');
+    if (isResend) showToast('Nuevo código enviado. Revisa tu bandeja de entrada.', 'success');
     if (!isResend) window.location.href = '/login';
   } catch (e) {
     showToast(e.message, 'error');
@@ -171,8 +171,12 @@ async function verifyOtp() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Código incorrecto.');
 
-    window.token = data.access_token;
-    sessionStorage.setItem('portal_token',         data.access_token);
+    // El servidor usa sesión (cookie), no JWT en cliente.
+    // Solo guardamos en sessionStorage lo que necesitamos en el front.
+    if (data.access_token) {
+      window.token = data.access_token;
+      sessionStorage.setItem('portal_token', data.access_token);
+    }
     sessionStorage.setItem('portal_role',          data.role || 'supplier');
     sessionStorage.setItem('portal_email',         currentEmail);
     sessionStorage.setItem('portal_redirect_to',   data.redirect_to || '/');
@@ -180,15 +184,27 @@ async function verifyOtp() {
 
     clearInterval(otpTimer);
 
-    const headerUser = document.getElementById('headerUser');
+    const headerUser  = document.getElementById('headerUser');
     const headerEmail = document.getElementById('headerEmail');
-    if (headerUser) headerUser.style.display = 'flex';
+    if (headerUser)  headerUser.style.display  = 'flex';
     if (headerEmail) headerEmail.textContent = currentEmail;
 
-    // La redirección la decide solo el servidor
-    window.location.href = data.redirect_to || '/';
+    // Mensaje de bienvenida según rol
+    const role = data.role || 'supplier';
+    const destino = data.redirect_to || '/';
+    if (role === 'admin') {
+      showToast('Bienvenido/a, administrador/a. Redirigiendo…', 'success');
+    } else {
+      showToast('Acceso correcto. Redirigiendo a tu perfil…', 'success');
+    }
 
-} catch (e) {
+    // Pequeña pausa para que el toast sea visible antes de redirigir
+    setTimeout(() => {
+      window.location.href = destino;
+    }, 800);
+
+  } catch (e) {
+    showToast(e.message, 'error');
     if (errEl) {
       errEl.textContent = e.message;
       errEl.style.display = 'block';
