@@ -1,67 +1,74 @@
 // guard.js – client-side route guard basado en allowed_pages del servidor
 
-(function () {
-  const token      = sessionStorage.getItem('portal_token');
-  const role       = sessionStorage.getItem('portal_role') || 'supplier';
-  const redirectTo = sessionStorage.getItem('portal_redirect_to') || '/';
+function showRouteToast(msg, type = 'error') {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.className = 'show' + (type ? ' toast-' + type : '');
+  clearTimeout(window._routeToastTimer);
+  window._routeToastTimer = setTimeout(() => (t.className = ''), 4000);
+}
 
-  let allowed = [];
+function getAllowedPages() {
   try {
-    allowed = JSON.parse(sessionStorage.getItem('portal_allowed_pages') || '[]');
+    return JSON.parse(sessionStorage.getItem('portal_allowed_pages') || '[]');
   } catch (_) {
-    allowed = [];
+    return [];
+  }
+}
+
+function isAllowedPath(pathname) {
+  const allowed = getAllowedPages();
+  return allowed.some(route => pathname === route || pathname.startsWith(route + '/'));
+}
+
+function goIfAllowed(pathname) {
+  if (!isAllowedPath(pathname)) {
+    showRouteToast('No estás autorizado para acceder a la página que intentas cargar.', 'error');
+    return false;
   }
 
-  // Sin token → siempre al login raíz
-  if (!token) {
-    window.location.replace('/');
+  window.location.href = pathname;
+  return true;
+}
+
+(function () {
+  const role = sessionStorage.getItem('portal_role') || 'supplier';
+  const redirectTo = sessionStorage.getItem('portal_redirect_to') || '/';
+  const allowed = getAllowedPages();
+
+  if (!role || !allowed.length) {
     return;
   }
 
   const currentPath = window.location.pathname;
-
-  // Si tenemos lista de páginas permitidas, validar la ruta actual
-  if (allowed.length > 0 && !allowed.includes(currentPath)) {
-    // Primer elemento es la página por defecto del rol
+  if (!isAllowedPath(currentPath)) {
     window.location.replace(allowed[0] || redirectTo || '/');
-    return;
   }
 })();
 
-// API opcional
 function ensureAuthenticated(expectedRole) {
-  const token = sessionStorage.getItem('portal_token');
-  const role  = sessionStorage.getItem('portal_role') || 'supplier';
+  const role = sessionStorage.getItem('portal_role') || 'supplier';
 
-  if (!token) {
+  if (!role) {
     window.location.replace('/');
     return false;
   }
 
   if (expectedRole && role !== expectedRole) {
-    // Si el rol no coincide, enviamos a la página por defecto registrada
-    let allowed = [];
-    try {
-      allowed = JSON.parse(sessionStorage.getItem('portal_allowed_pages') || '[]');
-    } catch (_) {
-      allowed = [];
-    }
-    window.location.replace(allowed[0] || '/');
+    showRouteToast('No estás autorizado para acceder a la página que intentas cargar.', 'error');
     return false;
   }
 
-  let allowed = [];
-  try {
-    allowed = JSON.parse(sessionStorage.getItem('portal_allowed_pages') || '[]');
-  } catch (_) {
-    allowed = [];
-  }
-
   const currentPath = window.location.pathname;
-  if (allowed.length > 0 && !allowed.includes(currentPath)) {
-    window.location.replace(allowed[0] || '/');
+  if (!isAllowedPath(currentPath)) {
+    showRouteToast('No estás autorizado para acceder a la página que intentas cargar.', 'error');
     return false;
   }
 
   return true;
 }
+
+window.goIfAllowed = goIfAllowed;
+window.isAllowedPath = isAllowedPath;
+window.ensureAuthenticated = ensureAuthenticated;

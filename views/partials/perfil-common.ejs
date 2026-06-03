@@ -9,8 +9,10 @@
   const headerDescription = isEdit
     ? 'Completa la información en cada pestaña y guarda el borrador o envía para revisión.'
     : 'Esta es la información de que disponemos en tu ficha de proveedor. <br>Revísala y edítala cuando necesites actualizarla.';
+  
+  console.log(JSON.stringify(typeof user !== 'undefined' ? user : locals.user, null, 2));
+
 %>
-<pre><%= JSON.stringify(typeof user !== 'undefined' ? user : locals.user, null, 2) %></pre>
 
 <section class="step active" id="step-form">
   <div style="display:flex;justify-content:flex-start;align-items:center;margin:.5rem">
@@ -338,7 +340,10 @@
       <% } %>
     </div>
     <div style="display:flex;justify-content:flex-end;max-width:920px;margin:1rem auto 0">
+      <a href="/proveedores" class="btn btn-secondary">Volver</a>
+      <% if (isAdmin) { %>
       <button class="btn btn-primary" id="editProfileBtn">Editar</button>
+      <% } %>
     </div>
   <% } %>
 

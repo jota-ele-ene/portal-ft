@@ -1,9 +1,11 @@
+<%
+  const inviteActionHtml = (user && user.role === 'admin')
+    ? '<button class="btn btn-primary btn-sm" onclick="openAddInviteModal()">+ Añadir proveedor</button>'
+    : '<button class="btn btn-primary btn-sm" onclick="showInviteForm()">+ Invitar proveedor</button>';
+%>
 <%- include('layout', {
   title: 'Gestión de proveedores',
   body: `
-  <script>
-    window.CURRENT_USER = <%- JSON.stringify(user || null) %>;
-  </script>
   <section id="admin-dashboard">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
       <div>
@@ -20,11 +22,7 @@
           <option value="rechazado">Rechazado</option>
         </select>
         <button class="btn btn-secondary btn-sm" onclick="loadSuppliers()">⟳ Actualizar</button>
-
-        ${(user && user.role === 'admin')
-          ? `<button class="btn btn-primary btn-sm" onclick="openAddInviteModal()">+ Añadir proveedor</button>`
-          : `<button class="btn btn-primary btn-sm" onclick="showInviteForm()">+ Invitar proveedor</button>`
-        }
+        ${inviteActionHtml}
       </div>
     </div>
 
@@ -53,7 +51,7 @@
         <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:1rem">Añadir proveedor</h2>
         <p style="color:var(--text-muted);margin-bottom:1.5rem">Elige si quieres añadir un nuevo proveedor o invitarle por correo al portal.</p>
         <div style="display:flex;gap:1rem;flex-wrap:wrap">
-          <button class="btn btn-secondary" onclick="window.location.href='/perfil'">Añadir proveedor</button>
+          <button class="btn btn-secondary" onclick="goIfAllowed('/perfil')">Añadir proveedor</button>
           <button class="btn btn-primary" onclick="showInviteForm()">Invitar proveedor</button>
         </div>
       </div>
@@ -71,9 +69,9 @@
           <p id="inviteSuccess" style="display:none;color:var(--success);font-size:.9rem;margin-top:.75rem"></p>
         </div>
 
-        <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin-top:1rem;">
+        <div style="display:flex;gap:.75rem;flex-wrap:wrap;justify-content:flex-end;margin-top:1rem;">
+          <button class="btn btn-secondary" onclick="closeInviteModal()">Volver</button>
           <button class="btn btn-primary" onclick="inviteSupplier()">Invitar</button>
-          <button class="btn btn-secondary" onclick="openAddInviteModal()">Volver</button>
         </div>
       </div>
     </div>

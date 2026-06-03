@@ -1,7 +1,7 @@
 <header class="site-header">
   <div class="header-brand">
     <img class="header-logo" src="/static/images/LogoFT-Azul.png" alt="Fundación Telefónica">
-    <span class="header-subtitle">Portal electrónic0</span>
+    <span class="header-subtitle">Portal electrónico</span>
   </div>
   <div class="header-user" id="headerUser" style="display:none">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -17,8 +17,8 @@
     const headerUser = document.getElementById('headerUser');
     const headerEmail = document.getElementById('headerEmail');
     const headerLogout = document.getElementById('headerLogout');
-    const token = sessionStorage.getItem('portal_token');
     const email = sessionStorage.getItem('portal_email');
+
     if (email) {
       if (headerUser) headerUser.style.display = 'flex';
       if (headerEmail) headerEmail.textContent = email;
@@ -26,17 +26,16 @@
     }
 
     const apiBase = window.API || (window.__API_BASE__ || window.location.pathname.replace(/\/[^/]*$/, '')).replace(/\/$/, '');
+
     if (headerLogout) {
       headerLogout.addEventListener('click', async () => {
-        if (token) {
-          try {
-            await fetch(`${apiBase}/auth/logout`, {
-              method: 'POST',
-              credentials: 'include'
-            });
-          } catch (e) {
-            console.warn('Logout backend failed:', e);
-          }
+        try {
+          await fetch(`${apiBase}/auth/logout`, {
+            method: 'POST',
+            credentials: 'include'
+          });
+        } catch (e) {
+          console.warn('Logout backend failed:', e);
         }
 
         sessionStorage.removeItem('portal_token');

@@ -43,13 +43,15 @@ function closeInviteModal() {
 }
 
 function showInviteForm() {
+  const modal = document.getElementById('inviteModal');
   const options = document.getElementById('inviteOptionScreen');
   const form = document.getElementById('inviteFormScreen');
   const error = document.getElementById('inviteError');
   const success = document.getElementById('inviteSuccess');
 
-  if (!options || !form) return;
+  if (!modal || !options || !form) return;
 
+  modal.style.display = 'flex';
   options.style.display = 'none';
   form.style.display = 'block';
 

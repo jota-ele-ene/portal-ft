@@ -96,7 +96,12 @@ function requireAllowedPage(req, res, next) {
     return res.redirect('/');
   }
 
-  if (!allowedRoutes.includes(req.path)) {
+  const pathname = req.path;
+  const isAllowed = allowedRoutes.some(route =>
+    pathname === route || pathname.startsWith(route + '/')
+  );
+
+  if (!isAllowed) {
     return res.redirect(buildUnauthorizedRedirect(req));
   }
 
@@ -184,7 +189,7 @@ app.get('/perfil', requireAuthPage, (req, res) => {
   });
 });
 
-app.get('/perfil/:id', requireAdminPage, (req, res) => {
+app.get('/perfil/:id', requireAuthPage, (req, res) => {
   res.render('perfil', {
     title: 'Portal electrónico - Perfil de proveedor',
     supplierId: req.params.id,
@@ -193,7 +198,7 @@ app.get('/perfil/:id', requireAdminPage, (req, res) => {
   });
 });
 
-app.get('/perfil-edit/:id', requireAdminPage, (req, res) => {
+app.get('/perfil-edit/:id', requireAuthPage, (req, res) => {
   res.render('perfil-edit', {
     title: 'Portal electrónico - Editar proveedor',
     supplierId: req.params.id,

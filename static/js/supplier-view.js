@@ -2,14 +2,9 @@
   // Siempre usar rutas absolutas desde la raíz para evitar que /perfil/:id
   // corrompa la base de la API (e.g. window.APP_BASE daría '/perfil' en vez de '')
   const API = window.__API_BASE__ || '';
-  const token = sessionStorage.getItem('portal_token') || window.token || null;
   // SUPPLIER_ID se inyecta desde la vista EJS cuando el admin visualiza un proveedor concreto
   const supplierId = window.SUPPLIER_ID || null;
   let currentProfile = { documents: [] };
-
-  if (!token) {
-    window.location.href = '/';
-  }
 
   // Devuelve la URL de API correcta según si somos admin viendo otro proveedor o el propio
   function profileUrl() {
@@ -20,7 +15,7 @@
 
   async function fetchProfile() {
     try {
-      const res = await fetch(profileUrl(), { headers: { 'Authorization': 'Bearer ' + token } });
+      const res = await fetch(profileUrl(), { headers: {         credentials: 'include' } });
       if (!res.ok) {
         window.location.href = supplierId ? '/proveedores' : '/perfil-edit';
         return;
@@ -88,7 +83,7 @@
     if (!filename) return;
     try {
       const res = await fetch(`/documents/download/${filename}`, {
-        headers: { 'Authorization': 'Bearer ' + token }
+        credentials: 'include'
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
@@ -112,7 +107,7 @@
     if (!filename) return;
     try {
       const res = await fetch(`/documents/download/${filename}`, {
-        headers: { 'Authorization': 'Bearer ' + token }
+        credentials: 'include'
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
@@ -138,7 +133,7 @@
     if (!confirm('¿Eliminar este documento?')) return;
     try {
       const res = await fetch(`/documents/${filename}`, {
-        method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token }
+        method: 'DELETE', headers: {         credentials: 'include' }
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -147,7 +142,7 @@
       currentProfile.documents = (currentProfile.documents || []).filter(d => encodeURIComponent(d.filename) !== filename);
       try {
         await fetch(profileUrl(), {
-          method: 'PUT', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          method: 'PUT', headers: {         credentials: 'include' },
           body: JSON.stringify({ documents: currentProfile.documents })
         });
       } catch (e) {
