@@ -5,31 +5,31 @@
  *
  * GET    /suppliers/me                    → perfil del proveedor autenticado
  * PUT    /suppliers/me                    → actualiza perfil (+ envía correo al responsable)
- * GET    /suppliers/admin/list            → lista todos (solo admin)
- * GET    /suppliers/admin/:id             → detalle de un proveedor (solo admin)
- * PUT    /suppliers/admin/:id             → edita un proveedor (solo admin, + correo)
- * PATCH  /suppliers/admin/:id/status      → cambia estado (solo admin)
+ * GET    /suppliers/admin/list           → lista todos (solo admin)
+ * GET    /suppliers/admin/:id            → detalle de un proveedor (solo admin)
+ * PUT    /suppliers/admin/:id            → edita un proveedor (solo admin, + correo)
+ * PATCH  /suppliers/admin/:id/status     → cambia estado (solo admin)
  * GET    /health
  */
 
-const express  = require('express');
-const cors     = require('cors');
-const jwt      = require('jsonwebtoken');
-const fs       = require('fs');
-const path     = require('path');
-const crypto   = require('crypto');
+const express = require('express');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 8002;
 
 app.use(cors());
 app.use(express.json());
 
-const SECRET_KEY   = process.env.JWT_SECRET       || 'cambia-este-secreto-en-produccion';
-const DATA_PATH    = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
+const SECRET_KEY = process.env.JWT_SECRET || 'cambia-este-secreto-en-produccion';
+const DATA_PATH = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
 const AUTH_DB_PATH = path.join(DATA_PATH, 'auth.json');
-const DB_PATH      = process.env.GESTION_DB_PATH || path.join(DATA_PATH, 'suppliers.json');
+const DB_PATH = process.env.GESTION_DB_PATH || path.join(DATA_PATH, 'suppliers.json');
 
 // ── Plantillas de correo ───────────────────────────────────────────────────────
 const TEMPLATES_PATH = path.join(__dirname, 'email-templates');
@@ -46,8 +46,9 @@ function loadEmailTemplate(name) {
 
 function renderTemplate(template, data) {
   let subject = template.subject || '';
-  let html    = template.html    || '';
-  let text    = template.text    || '';
+  let html = template.html || '';
+  let text = template.text || '';
+
   const replacer = (str) =>
     str.replace(/\{\{(\w+)\}\}/g, (_, key) => {
       const val = data[key];
@@ -55,18 +56,23 @@ function renderTemplate(template, data) {
       if (typeof val === 'boolean') return val ? 'Sí' : 'No';
       return String(val);
     });
-  return { subject: replacer(subject), html: replacer(html), text: replacer(text) };
+
+  return {
+    subject: replacer(subject),
+    html: replacer(html),
+    text: replacer(text)
+  };
 }
 
 // ── Mailer ─────────────────────────────────────────────────────────────────────
 function createTransport() {
   return nodemailer.createTransport({
-    host:   process.env.SMTP_HOST   || 'localhost',
-    port:   Number(process.env.SMTP_PORT)   || 1025,
+    host: process.env.SMTP_HOST || 'localhost',
+    port: Number(process.env.SMTP_PORT) || 1025,
     secure: process.env.SMTP_SECURE === 'true',
-    auth:   (process.env.SMTP_USER && process.env.SMTP_PASS)
-              ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-              : undefined
+    auth: (process.env.SMTP_USER && process.env.SMTP_PASS)
+      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+      : undefined
   });
 }
 
@@ -160,50 +166,6 @@ function saveDB(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
 }
 
-function authenticate(req, res, next) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) {
-    return res.status(401).json({ detail: 'Token no proporcionado.' });
-  }
-  try {
-    const payload = jwt.verify(auth.slice(7), SECRET_KEY);
-    if (isTokenRevoked(payload.jti)) {
-      return res.status(401).json({ detail: 'Token inválido o expirado.' });
-    }
-    req.user = payload;
-    next();
-  } catch {
-    res.status(401).json({ detail: 'Token inválido o expirado.' });
-  }
-}
-
-function requireAdmin(req, res, next) {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ detail: 'Acceso restringido a administradores.' });
-  }
-  next();
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function getOrCreate(db, email) {
-  let s = db.suppliers.find(x => x.email === email);
-  if (!s) {
-    s = {
-      id:         crypto.randomUUID(),
-      email,
-      status:     'pendiente',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    db.suppliers.push(s);
-  }
-  return s;
-}
-
-function hasMinimum(s) {
-  return s.razon_social && s.nif && s.persona_contacto && s.iban;
-}
-
 function loadAuthDB() {
   try {
     if (!fs.existsSync(AUTH_DB_PATH)) return { revoked_tokens: [] };
@@ -219,34 +181,99 @@ function isTokenRevoked(jti) {
   return Array.isArray(db.revoked_tokens) && db.revoked_tokens.some(item => item.jti === jti);
 }
 
+/**
+ * authenticate:
+ * 1. Primero intenta sesión de servidor: req.session.user
+ * 2. Si no existe, intenta Bearer JWT como fallback de compatibilidad
+ */
+function authenticate(req, res, next) {
+  if (req.session && req.session.user) {
+    req.user = req.session.user;
+    return next();
+  }
+
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return res.status(401).json({ detail: 'No autenticado.' });
+  }
+
+  try {
+    const payload = jwt.verify(auth.slice(7), SECRET_KEY);
+    if (isTokenRevoked(payload.jti)) {
+      return res.status(401).json({ detail: 'Token inválido o expirado.' });
+    }
+
+    req.user = {
+      id: payload.id || null,
+      email: payload.sub,
+      role: payload.role,
+      sub: payload.sub
+    };
+
+    return next();
+  } catch {
+    return res.status(401).json({ detail: 'Token inválido o expirado.' });
+  }
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ detail: 'Acceso restringido a administradores.' });
+  }
+  next();
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function getOrCreate(db, email) {
+  let s = db.suppliers.find(x => x.email === email);
+  if (!s) {
+    s = {
+      id: crypto.randomUUID(),
+      email,
+      status: 'pendiente',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    db.suppliers.push(s);
+  }
+  return s;
+}
+
+function hasMinimum(s) {
+  return s.razon_social && s.nif && s.persona_contacto && s.iban;
+}
+
 const ALLOWED_FIELDS = [
-  'razon_social','nombre_comercial','nif','actividad','tipo_via','direccion',
-  'codigo_postal','provincia','ciudad','pais_residencia_fiscal','persona_contacto','email_contacto',
-  'telefono','iban','swift','banco','sucursal','codigo_entidad','codigo_sucursal','moneda_pago','alta_036'
+  'razon_social', 'nombre_comercial', 'nif', 'actividad', 'tipo_via', 'direccion',
+  'codigo_postal', 'provincia', 'ciudad', 'pais_residencia_fiscal', 'persona_contacto', 'email_contacto',
+  'telefono', 'iban', 'swift', 'banco', 'sucursal', 'codigo_entidad', 'codigo_sucursal', 'moneda_pago', 'alta_036'
 ];
 
 // responsible_email solo editable por admin
 const ADMIN_FIELDS = ['responsible_email'];
 
-const VALID_STATUSES = new Set(['pendiente','revision','aprobado','rechazado']);
+const VALID_STATUSES = new Set(['pendiente', 'revision', 'aprobado', 'rechazado']);
 
 // ── Rutas ──────────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'gestion' }));
 
 app.get('/suppliers/me', authenticate, (req, res) => {
+  const email = req.user.email || req.user.sub;
   const db = loadDB();
-  const s  = getOrCreate(db, req.user.sub);
+  const s = getOrCreate(db, email);
   saveDB(db);
   res.json(s);
 });
 
 app.put('/suppliers/me', authenticate, async (req, res) => {
-  const db    = loadDB();
-  const email = req.user.sub;
-  let s       = db.suppliers.find(x => x.email === email);
+  const db = loadDB();
+  const email = req.user.email || req.user.sub;
+  let s = db.suppliers.find(x => x.email === email);
 
   const updates = {};
-  ALLOWED_FIELDS.forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
+  ALLOWED_FIELDS.forEach(f => {
+    if (req.body[f] !== undefined) updates[f] = req.body[f];
+  });
 
   if (Array.isArray(req.body.documents)) {
     updates.documents = req.body.documents.map(doc => ({
@@ -263,14 +290,19 @@ app.put('/suppliers/me', authenticate, async (req, res) => {
   if (s) {
     Object.assign(s, updates);
   } else {
-    s = { id: crypto.randomUUID(), email, status: 'pendiente', created_at: new Date().toISOString(), ...updates };
+    s = {
+      id: crypto.randomUUID(),
+      email,
+      status: 'pendiente',
+      created_at: new Date().toISOString(),
+      ...updates
+    };
     db.suppliers.push(s);
   }
 
   if (hasMinimum(s) && s.status === 'pendiente') s.status = 'revision';
   saveDB(db);
 
-  // Enviar notificación al responsable de forma asíncrona (no bloquea la respuesta)
   sendResponsibleEmail(s).catch(e => console.error('[gestion] sendResponsibleEmail error:', e.message));
 
   res.json(s);
@@ -281,22 +313,22 @@ app.get('/suppliers/admin/list', authenticate, requireAdmin, (req, res) => {
   res.json({ suppliers: db.suppliers, total: db.suppliers.length });
 });
 
-// GET /suppliers/admin/:id — detalle de un proveedor concreto (solo admin)
 app.get('/suppliers/admin/:id', authenticate, requireAdmin, (req, res) => {
   const db = loadDB();
-  const s  = db.suppliers.find(x => x.id === req.params.id);
+  const s = db.suppliers.find(x => x.id === req.params.id);
   if (!s) return res.status(404).json({ detail: 'Proveedor no encontrado.' });
   res.json(s);
 });
 
-// PUT /suppliers/admin/:id — edita el perfil de un proveedor concreto (solo admin)
 app.put('/suppliers/admin/:id', authenticate, requireAdmin, async (req, res) => {
   const db = loadDB();
-  const s  = db.suppliers.find(x => x.id === req.params.id);
+  const s = db.suppliers.find(x => x.id === req.params.id);
   if (!s) return res.status(404).json({ detail: 'Proveedor no encontrado.' });
 
   const updates = {};
-  [...ALLOWED_FIELDS, ...ADMIN_FIELDS].forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
+  [...ALLOWED_FIELDS, ...ADMIN_FIELDS].forEach(f => {
+    if (req.body[f] !== undefined) updates[f] = req.body[f];
+  });
 
   if (Array.isArray(req.body.documents)) {
     updates.documents = req.body.documents.map(doc => ({
@@ -314,7 +346,6 @@ app.put('/suppliers/admin/:id', authenticate, requireAdmin, async (req, res) => 
   if (hasMinimum(s) && s.status === 'pendiente') s.status = 'revision';
   saveDB(db);
 
-  // Enviar notificación al responsable de forma asíncrona
   sendResponsibleEmail(s).catch(e => console.error('[gestion] sendResponsibleEmail error:', e.message));
 
   res.json(s);
@@ -322,20 +353,25 @@ app.put('/suppliers/admin/:id', authenticate, requireAdmin, async (req, res) => 
 
 app.patch('/suppliers/admin/:id/status', authenticate, requireAdmin, (req, res) => {
   const { status } = req.body;
+
   if (!VALID_STATUSES.has(status)) {
-    return res.status(400).json({ detail: `Estado inválido. Válidos: ${[...VALID_STATUSES].join(', ')}` });
+    return res.status(400).json({
+      detail: `Estado inválido. Válidos: ${[...VALID_STATUSES].join(', ')}`
+    });
   }
+
   const db = loadDB();
-  const s  = db.suppliers.find(x => x.id === req.params.id);
+  const s = db.suppliers.find(x => x.id === req.params.id);
   if (!s) return res.status(404).json({ detail: 'Proveedor no encontrado.' });
-  s.status     = status;
+
+  s.status = status;
   s.updated_at = new Date().toISOString();
   saveDB(db);
+
   res.json(s);
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────────
-
 if (require.main === module) {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   app.listen(PORT, '0.0.0.0', () => console.log(`[gestion] Puerto ${PORT}`));

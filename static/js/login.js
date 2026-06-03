@@ -42,6 +42,7 @@ async function sendOtp(isResend = false) {
   try {
     const res = await fetch(`${API}/auth/otp/request`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email })
     });
@@ -163,6 +164,7 @@ async function verifyOtp() {
   try {
     const res = await fetch(`${API}/auth/otp/verify`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: currentEmail, otp })
     });

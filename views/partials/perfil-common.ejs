@@ -9,8 +9,6 @@
   const headerDescription = isEdit
     ? 'Completa la información en cada pestaña y guarda el borrador o envía para revisión.'
     : 'Esta es la información de que disponemos en tu ficha de proveedor. <br>Revísala y edítala cuando necesites actualizarla.';
-  console.log('[perfil-common] user =', safeUser);
-  console.log('[perfil-common] isAdmin =', isAdmin);
 %>
 <pre><%= JSON.stringify(typeof user !== 'undefined' ? user : locals.user, null, 2) %></pre>
 
@@ -334,7 +332,6 @@
       </div>
     </div>
   <% } else { %>
-    <% const isAdmin = user && user.role === 'admin'; %>
     <div class="profile-actions">
       <% if (isAdmin) { %>
         <a href="/proveedores" class="btn btn-secondary">Volver</a>

@@ -1,7 +1,6 @@
 window.APP_BASE = window.APP_BASE || window.location.pathname.replace(/\/[^/]*$/, '');
 window.API = window.API || (window.__API_BASE__ || window.APP_BASE).replace(/\/$/, '');
 
-let adminToken = window.token || sessionStorage.getItem('portal_token') || null;
 let allSuppliers = [];
 let adminEmailLocal = '';
 
@@ -23,13 +22,18 @@ function openAddInviteModal() {
   const error = document.getElementById('inviteError');
   const success = document.getElementById('inviteSuccess');
   const input = document.getElementById('inviteEmailInput');
+  const nameInput = document.getElementById('inviteNameInput');
+
   if (!modal || !options || !form) return;
+
   modal.style.display = 'flex';
   options.style.display = 'block';
   form.style.display = 'none';
+
   if (error) error.style.display = 'none';
   if (success) success.style.display = 'none';
   if (input) input.value = '';
+  if (nameInput) nameInput.value = '';
 }
 
 function closeInviteModal() {
@@ -43,21 +47,48 @@ function showInviteForm() {
   const form = document.getElementById('inviteFormScreen');
   const error = document.getElementById('inviteError');
   const success = document.getElementById('inviteSuccess');
+
   if (!options || !form) return;
+
   options.style.display = 'none';
   form.style.display = 'block';
+
   if (error) error.style.display = 'none';
   if (success) success.style.display = 'none';
 }
 
+async function fetchCurrentAdmin() {
+  const res = await fetch(`${API}/auth/me`, {
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json'
+    }
+  });
+
+  if (!res.ok) {
+    throw new Error('No autenticado');
+  }
+
+  const me = await res.json();
+
+  if (!me || me.role !== 'admin') {
+    throw new Error('No autorizado');
+  }
+
+  return me;
+}
+
 async function inviteSupplier() {
   const emailInput = document.getElementById('inviteEmailInput');
-  const nameInput  = document.getElementById('inviteNameInput');
-  const error   = document.getElementById('inviteError');
+  const nameInput = document.getElementById('inviteNameInput');
+  const error = document.getElementById('inviteError');
   const success = document.getElementById('inviteSuccess');
+
   if (!emailInput || !error || !success) return;
 
   const email = emailInput.value.trim();
+  const name = nameInput ? nameInput.value.trim() : '';
+
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     error.textContent = 'Introduce un correo válido.';
     error.style.display = 'block';
@@ -71,63 +102,67 @@ async function inviteSupplier() {
   try {
     const res = await fetch(`${API}/auth/invite`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + adminToken
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
       },
-      // El backend leerá req.user.sub (admin) como responsible_email
-      body: JSON.stringify({ name: nameInput.value.trim(), email })
+      body: JSON.stringify({ name, email })
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Error al enviar la invitación.');
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data.detail || 'Error al enviar la invitación.');
+    }
 
     success.textContent = 'Invitación enviada correctamente.';
     success.style.display = 'block';
     emailInput.value = '';
     if (nameInput) nameInput.value = '';
+
     await loadSuppliers();
   } catch (e) {
-    error.textContent = e.message;
+    error.textContent = e.message || 'Error al enviar la invitación.';
     error.style.display = 'block';
     success.style.display = 'none';
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const dashboard = document.getElementById('admin-dashboard');
   const adminEmailDisplay = document.getElementById('adminEmailDisplay');
   const adminUserArea = document.getElementById('adminUserArea');
 
-  const role  = sessionStorage.getItem('portal_role')  || '';
-  const token = sessionStorage.getItem('portal_token') || null;
-  const email = sessionStorage.getItem('portal_email') || '';
+  try {
+    const me = await fetchCurrentAdmin();
+    adminEmailLocal = me.email || '';
 
-  if (role === 'admin' && token) {
-    adminToken      = token;
-    adminEmailLocal = email;
-  }
-
-  if (adminUserArea && adminEmailDisplay && adminEmailLocal) {
-    adminEmailDisplay.textContent = adminEmailLocal;
-    adminUserArea.style.display = 'flex';
-  }
-
-  if (dashboard) {
-    if (!adminToken) {
-      showToast('Sesión de administrador no válida. Vuelve a iniciar sesión.', 'error');
-      window.location.href = '/';
-      return;
+    if (adminUserArea && adminEmailDisplay && adminEmailLocal) {
+      adminEmailDisplay.textContent = adminEmailLocal;
+      adminUserArea.style.display = 'flex';
     }
-    loadSuppliers();
+
+    if (dashboard) {
+      await loadSuppliers();
+    }
+  } catch (e) {
+    showToast('Sesión de administrador no válida. Vuelve a iniciar sesión.', 'error');
+    window.location.href = '/';
+    return;
   }
 
-  // Cerrar menús desplegables al hacer click fuera
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.action-menu-wrapper')) {
-      document.querySelectorAll('.action-menu').forEach(m => m.style.display = 'none');
+      document.querySelectorAll('.action-menu').forEach(m => {
+        m.style.display = 'none';
+      });
     }
+
     if (!e.target.closest('.status-dropdown-wrapper')) {
-      document.querySelectorAll('.status-dropdown').forEach(m => m.style.display = 'none');
+      document.querySelectorAll('.status-dropdown').forEach(m => {
+        m.style.display = 'none';
+      });
     }
   });
 });
@@ -135,29 +170,37 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadSuppliers() {
   try {
     const res = await fetch(`${API}/suppliers/admin/list`, {
-      headers: { Authorization: 'Bearer ' + adminToken }
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json'
+      }
     });
-    if (!res.ok) throw new Error('Error al cargar proveedores.');
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data.detail || 'Error al cargar proveedores.');
+    }
+
     allSuppliers = data.suppliers || [];
 
     const countEl = document.getElementById('supplierCount');
     if (countEl) {
       countEl.textContent = `${allSuppliers.length} proveedor(es) registrado(s)`;
     }
+
     renderTable(allSuppliers);
   } catch (e) {
-    showToast(e.message, 'error');
+    showToast(e.message || 'Error al cargar proveedores.', 'error');
   }
 }
 
 function filterTable() {
-  const qEl  = document.getElementById('searchInput');
+  const qEl = document.getElementById('searchInput');
   const stEl = document.getElementById('statusFilter');
   if (!qEl || !stEl) return;
 
-  const q  = qEl.value.toLowerCase();
+  const q = qEl.value.toLowerCase();
   const st = stEl.value;
 
   renderTable(
@@ -168,6 +211,7 @@ function filterTable() {
         (s.nif || '').toLowerCase().includes(q) ||
         (s.email || '').toLowerCase().includes(q) ||
         (s.responsible_email || '').toLowerCase().includes(q);
+
       return matchQ && (!st || s.status === st);
     })
   );
@@ -175,8 +219,8 @@ function filterTable() {
 
 const STATUS_LABELS = {
   pendiente: 'Pendiente',
-  revision:  'En revisión',
-  aprobado:  'Aprobado',
+  revision: 'En revisión',
+  aprobado: 'Aprobado',
   rechazado: 'Rechazado'
 };
 
@@ -196,51 +240,75 @@ function renderTable(suppliers) {
     .map(s => {
       const nombre = s.alias || s.razon_social || s.nombre_comercial || s.email || '—';
       const responsable = s.responsible_email || '—';
-      const status  = s.status || 'pendiente';
-      const fecha   = s.updated_at ? new Date(s.updated_at).toLocaleDateString('es-ES') : '—';
+      const status = s.status || 'pendiente';
+      const fecha = s.updated_at ? new Date(s.updated_at).toLocaleDateString('es-ES') : '—';
 
-      // Opciones del dropdown de estado (excluyendo el actual)
       const statusOptions = STATUS_NEXT
         .filter(st => st !== status)
-        .map(st => `<button class="status-option" onclick="updateStatus('${s.id}','${st}');closeStatusDropdown(this)" style="display:block;width:100%;text-align:left;padding:.4rem .75rem;border:none;background:none;cursor:pointer;font-size:.82rem;color:var(--text)">${STATUS_LABELS[st]}</button>`)
+        .map(
+          st => `
+            <button
+              class="status-option"
+              onclick="updateStatus('${s.id}','${st}');closeStatusDropdown(this)"
+              style="display:block;width:100%;text-align:left;padding:.4rem .75rem;border:none;background:none;cursor:pointer;font-size:.82rem;color:var(--text)"
+            >
+              ${STATUS_LABELS[st]}
+            </button>
+          `
+        )
         .join('');
 
       return `
-    <tr>
-      <td style="font-weight:600">
-        <a href="/perfil/${s.id}" style="color:var(--primary);text-decoration:none">${nombre}</a>
-      </td>
-      <td style="font-size:.82rem;color:var(--text-muted)">${responsable}</td>
-      <td>
-        <div class="status-dropdown-wrapper" style="position:relative;display:inline-block">
-          <button class="badge badge-${status}" onclick="toggleStatusDropdown(this)" title="Cambiar estado"
-            style="cursor:pointer;border:none;background:none;padding:0;font:inherit">
-            ${STATUS_LABELS[status]}
-          </button>
-          </div>
-        </div>
-      </td>
-      <td style="color:var(--text-muted);font-size:.78rem">${fecha}</td>
-    </tr>`;
+        <tr>
+          <td style="font-weight:600">
+            <a href="/perfil/${s.id}" style="color:var(--primary);text-decoration:none">${nombre}</a>
+          </td>
+          <td style="font-size:.82rem;color:var(--text-muted)">${responsable}</td>
+          <td>
+            <div class="status-dropdown-wrapper" style="position:relative;display:inline-block">
+              <button
+                class="badge badge-${status}"
+                onclick="toggleStatusDropdown(this)"
+                title="Cambiar estado"
+                style="cursor:pointer;border:none;background:none;padding:0;font:inherit"
+              >
+                ${STATUS_LABELS[status]}
+              </button>
+              <div
+                class="status-dropdown"
+                style="display:none;position:absolute;top:110%;left:0;min-width:170px;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:.5rem;box-shadow:0 8px 24px rgba(0,0,0,.08);z-index:20;padding:.25rem 0"
+              >
+                ${statusOptions}
+              </div>
+            </div>
+          </td>
+          <td style="color:var(--text-muted);font-size:.78rem">${fecha}</td>
+        </tr>
+      `;
     })
     .join('');
 }
 
 function toggleActionMenu(btn) {
-  // Cerrar otros menús abiertos
   document.querySelectorAll('.action-menu').forEach(m => {
     if (m !== btn.nextElementSibling) m.style.display = 'none';
   });
+
   const menu = btn.nextElementSibling;
-  if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  if (menu) {
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  }
 }
 
 function toggleStatusDropdown(btn) {
   document.querySelectorAll('.status-dropdown').forEach(m => {
     if (m !== btn.nextElementSibling) m.style.display = 'none';
   });
+
   const dropdown = btn.nextElementSibling;
-  if (dropdown) dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+  if (dropdown) {
+    dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+  }
 }
 
 function closeStatusDropdown(optionBtn) {
@@ -250,29 +318,46 @@ function closeStatusDropdown(optionBtn) {
 
 async function updateStatus(id, status) {
   if (!status) return;
+
   try {
     const res = await fetch(`${API}/suppliers/admin/${id}/status`, {
       method: 'PATCH',
+      credentials: 'include',
       headers: {
-        Authorization: 'Bearer ' + adminToken,
+        Accept: 'application/json',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ status })
     });
-    if (!res.ok) throw new Error('Error al actualizar.');
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data.detail || 'Error al actualizar.');
+    }
+
     showToast('Estado actualizado.', 'success');
     await loadSuppliers();
   } catch (e) {
-    showToast(e.message, 'error');
+    showToast(e.message || 'Error al actualizar.', 'error');
   }
 }
 
-function adminLogout() {
-  adminToken = null;
-  sessionStorage.removeItem('portal_token');
-  sessionStorage.removeItem('portal_role');
-  sessionStorage.removeItem('portal_email');
-  const adminUserArea = document.getElementById('adminUserArea');
-  if (adminUserArea) adminUserArea.style.display = 'none';
-  window.location.href = '/';
+async function adminLogout() {
+  try {
+    await fetch(`${API}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+  } catch (e) {
+    console.warn('Error al cerrar sesión', e);
+  } finally {
+    sessionStorage.removeItem('portal_token');
+    sessionStorage.removeItem('portal_role');
+    sessionStorage.removeItem('portal_email');
+    window.location.href = '/';
+  }
 }

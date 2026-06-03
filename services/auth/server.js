@@ -275,13 +275,30 @@ app.get('/health', (req, res) =>
   res.json({ status: 'ok', service: 'auth' })
 );
 
-app.get('/auth/me', authenticate, (req, res) => {
-  res.json({
-    email: req.user.sub,
-    role:  req.user.role,
-    iat:   req.user.iat,
-    exp:   req.user.exp
-  });
+app.get('/auth/me', (req, res) => {
+  if (req.session?.user) {
+    return res.json({
+      email: req.session.user.email,
+      role: req.session.user.role
+    });
+  }
+
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return res.status(401).json({ detail: 'No autenticado.' });
+  }
+
+  try {
+    const payload = jwt.verify(auth.slice(7), SECRET_KEY);
+    return res.json({
+      email: payload.sub,
+      role: payload.role,
+      iat: payload.iat,
+      exp: payload.exp
+    });
+  } catch (e) {
+    return res.status(401).json({ detail: 'Token inválido o expirado.' });
+  }
 });
 
 // Devuelve el mapa de páginas por rol (solo admin)
@@ -366,16 +383,21 @@ app.post('/auth/otp/verify', (req, res) => {
   const user  = getOrCreateUser(db, emailLower);
   saveDB(db);
 
-  const token       = createJWT(emailLower, user.role);
-  const redirectTo  = getDefaultRedirect(db, user.role);
+  const redirectTo   = getDefaultRedirect(db, user.role);
   const allowedPages = getAllowedPages(db, user.role);
 
+  if (req.session) {
+    req.session.user = {
+      id: user.id,
+      email: user.email,
+      role: user.role
+    };
+  }
+
   res.json({
-    access_token:  token,
-    token_type:    'bearer',
-    role:          user.role,
-    expires_in:    TOKEN_EXP * 60,
-    redirect_to:   redirectTo,
+    ok: true,
+    role: user.role,
+    redirect_to: redirectTo,
     allowed_pages: allowedPages
   });
 });
@@ -437,22 +459,16 @@ app.post('/auth/invite', authenticate, requireAdmin, async (req, res) => {
 });
 
 app.post('/auth/logout', (req, res) => {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) {
-    return res.status(401).json({ detail: 'Token no proporcionado.' });
+  if (req.session) {
+    return req.session.destroy(err => {
+      if (err) {
+        return res.status(500).json({ detail: 'No se pudo cerrar la sesión.' });
+      }
+      return res.json({ message: 'Sesión cerrada correctamente.' });
+    });
   }
 
-  const token = auth.slice(7);
-  try {
-    const payload = jwt.verify(token, SECRET_KEY);
-    if (isTokenRevoked(payload.jti)) {
-      return res.json({ message: 'Sesión ya invalidada.' });
-    }
-    revokeToken(token);
-    return res.json({ message: 'Sesión cerrada correctamente.' });
-  } catch (e) {
-    return res.status(401).json({ detail: 'Token inválido o expirado.' });
-  }
+  return res.json({ message: 'Sesión cerrada correctamente.' });
 });
 
 // ── Start / Export ─────────────────────────────────────────────────────────────
@@ -461,5 +477,8 @@ if (require.main === module) {
     console.log(`[auth] Puerto ${PORT}`)
   );
 } else {
-  module.exports = app;
+
+    module.exports = app;
+    module.exports.authenticate = authenticate;
+
 }

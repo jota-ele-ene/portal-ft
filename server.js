@@ -6,6 +6,7 @@ const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
 const fs      = require('fs/promises');
+const session = require('express-session');
 
 const app  = express();
 const PORT = process.env.PORT || 8000;
@@ -16,19 +17,55 @@ app.use(cors());
 app.use(express.json({ limit: `${MAX_SIZE_MB * 2}mb` }));
 app.use(express.urlencoded({ limit: `${MAX_SIZE_MB * 2}mb`, extended: true }));
 
-// ── Frontend estático ────────────────────────────────────────────────
+app.use(session({
+  name: process.env.SESSION_COOKIE_NAME || 'portal.sid',
+  secret: process.env.SESSION_SECRET || 'cambia-esta-clave-de-sesion',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: false,
+    maxAge: (parseInt(process.env.TOKEN_EXPIRE_MINUTES || '120')) * 60 * 1000
+  }
+}));
+
 const STATIC_DIR = process.env.STATIC_DIR || path.join(__dirname, 'static');
 const DATA_DIR = path.join(__dirname, 'data');
 
 app.use('/static', express.static(STATIC_DIR));
 app.use('/data', express.static(DATA_DIR));
 
-// ── Configuración de vistas (EJS) ─────────────────────────────────────
-app.set('views', path.join(__dirname, 'views')); // carpeta views/
-app.set('view engine', 'ejs');                   // motor EJS
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'ejs');
 
-// ── Microservicios ───────────────────────────────────────────────────
-const authService     = require('./services/auth/server');
+app.use((req, res, next) => {
+  req.user = req.session?.user || null;
+  res.locals.user = req.user || null;
+  next();
+});
+
+function requireAuthPage(req, res, next) {
+  if (!req.user) {
+    return res.redirect('/');
+  }
+  next();
+}
+
+function requireAdminPage(req, res, next) {
+  if (!req.user) {
+    return res.redirect('/');
+  }
+  if (req.user.role !== 'admin') {
+    return res.status(403).render('404', { title: 'Portal electrónico - Acceso denegado' });
+  }
+  next();
+}
+
+const authModule = require('./services/auth/server');
+const authService = authModule;
+const { authenticate } = authModule;
+
 const gestionService  = require('./services/gestion/server');
 const archivosService = require('./services/archivos/server');
 
@@ -36,13 +73,14 @@ app.use(authService);
 app.use(gestionService);
 app.use(archivosService);
 
-app.use((req, res, next) => {
-  res.locals.user = req.user || null;
-  next();
-});
-
-// ── Rutas de páginas (render EJS) ────────────────────────────────────
 app.get('/', (req, res) => {
+  if (req.user?.role === 'admin') {
+    return res.redirect('/proveedores');
+  }
+  if (req.user?.role === 'supplier') {
+    return res.redirect('/perfil');
+  }
+
   res.render('login-email', {
     title: 'Portal de Proveedores',
     adminEmailContact: ADMIN_EMAIL
@@ -50,50 +88,65 @@ app.get('/', (req, res) => {
 });
 
 app.get('/login', (req, res) => {
+  if (req.user?.role === 'admin') {
+    return res.redirect('/proveedores');
+  }
+  if (req.user?.role === 'supplier') {
+    return res.redirect('/perfil');
+  }
+
   res.render('login-otp', { title: 'Portal electrónico - Login' });
 });
 
-app.get('/proveedores', (req, res) => {
-  res.render('admin-proveedores', { title: 'Portal electrónico - Administración' });
+app.get('/proveedores', requireAdminPage, (req, res) => {
+  res.render('admin-proveedores', {
+    title: 'Portal electrónico - Administración',
+    user: req.user
+  });
 });
 
-// Rutas sin parámetro: uso propio del proveedor autenticado
-app.get('/perfil-edit', (req, res) => {
-  res.render('perfil-edit', { title: 'Portal electrónico - Editar perfil', supplierId: null, mode: 'edit' });
+app.get('/perfil-edit', requireAuthPage, (req, res) => {
+  res.render('perfil-edit', {
+    title: 'Portal electrónico - Editar perfil',
+    supplierId: null,
+    mode: 'edit',
+    user: req.user
+  });
 });
 
-app.get('/perfil', (req, res) => {
-  res.render('perfil', { title: 'Portal electrónico - Perfil de proveedores', supplierId: null, mode: 'view' });
+app.get('/perfil', requireAuthPage, (req, res) => {
+  res.render('perfil', {
+    title: 'Portal electrónico - Perfil de proveedores',
+    supplierId: null,
+    mode: 'view',
+    user: req.user
+  });
 });
 
-// Rutas con :id → el administrador ve/edita el perfil de un proveedor concreto
-app.get('/perfil/:id', (req, res) => {
+app.get('/perfil/:id', requireAdminPage, (req, res) => {
   res.render('perfil', {
     title: 'Portal electrónico - Perfil de proveedor',
     supplierId: req.params.id,
-    user: req.user || res.locals.user || null, 
+    user: req.user,
     mode: 'view'
   });
 });
 
-app.get('/perfil-edit/:id', (req, res) => {
+app.get('/perfil-edit/:id', requireAdminPage, (req, res) => {
   res.render('perfil-edit', {
     title: 'Portal electrónico - Editar proveedor',
     supplierId: req.params.id,
+    user: req.user,
     mode: 'edit'
   });
 });
 
-// Health global
 app.get('/health', (req, res) =>
   res.json({ status: 'ok', service: 'portal-unificado' })
 );
 
 const BDE_ENTITIES_PATH = path.join(DATA_DIR, 'bde_entities.json');
-let bdeEntityCache = {
-  timestamp: 0,
-  data: null
-};
+let bdeEntityCache = { timestamp: 0, data: null };
 
 async function loadBankEntityData() {
   const now = Date.now();
@@ -109,17 +162,11 @@ async function loadBankEntityData() {
       if (!row || !row.codigo) return;
       mapping[row.codigo] = { name: row.nombre || '', bic: row.bic || '' };
     });
-    bdeEntityCache = {
-      timestamp: now,
-      data: mapping
-    };
+    bdeEntityCache = { timestamp: now, data: mapping };
     return mapping;
   } catch (error) {
     console.error('loadBankEntityData error', error);
-    bdeEntityCache = {
-      timestamp: now,
-      data: {}
-    };
+    bdeEntityCache = { timestamp: now, data: {} };
     return {};
   }
 }
@@ -160,7 +207,7 @@ app.get('/branch-address', async (req, res) => {
     });
     const cookies = homeRes.headers.get('set-cookie') || '';
     const homeHtml = await homeRes.text();
-    const tokenMatch = homeHtml.match(/id="form__token"[^>]*value="([^"]+)"/);
+    const tokenMatch = homeHtml.match(/id=\"form__token\"[^>]*value=\"([^\"]+)\"/);
     const token = tokenMatch ? tokenMatch[1] : '';
 
     const body = new URLSearchParams();
@@ -180,7 +227,7 @@ app.get('/branch-address', async (req, res) => {
       body: body.toString()
     });
     const resultHtml = await postRes.text();
-    const addressMatch = resultHtml.match(/var\s+mapa\s*=\s*"([^"]+)"/);
+    const addressMatch = resultHtml.match(/var\\s+mapa\\s*=\\s*\"([^\"]+)\"/);
     const address = addressMatch ? addressMatch[1].trim() : '';
     return res.json({ address });
   } catch (error) {
@@ -190,11 +237,7 @@ app.get('/branch-address', async (req, res) => {
 });
 
 const CP_CITY_PATH = path.join(DATA_DIR, 'cp_city.json');
-
-let cpCityCache = {
-  timestamp: 0,
-  data: null
-};
+let cpCityCache = { timestamp: 0, data: null };
 
 async function loadPostalCityData() {
   const now = Date.now();
@@ -213,17 +256,11 @@ async function loadPostalCityData() {
         provincia: row.provincia || ''
       };
     });
-    cpCityCache = {
-      timestamp: now,
-      data: mapping
-    };
+    cpCityCache = { timestamp: now, data: mapping };
     return mapping;
   } catch (error) {
     console.error('loadPostalCityData error', error);
-    cpCityCache = {
-      timestamp: now,
-      data: {}
-    };
+    cpCityCache = { timestamp: now, data: {} };
     return {};
   }
 }
@@ -250,12 +287,10 @@ app.get('/postal-info', async (req, res) => {
   }
 });
 
-// Fallback opcional: si entras a una ruta desconocida, te llevo al login
 app.get('*', (req, res) => {
   res.render('404', { title: 'Portal electrónico - Upsss!!!!' });
 });
 
-// ── Arranque ─────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[portal] Servidor unificado corriendo en http://0.0.0.0:${PORT}`);
 });
