@@ -19,10 +19,12 @@ function getAllowedPages() {
 
 function isAllowedPath(pathname) {
   const allowed = getAllowedPages();
+  console.log('isAllowedPath(): Checking if', pathname, 'is allowed against', allowed);
   return allowed.some(route => pathname === route || pathname.startsWith(route + '/'));
 }
 
 function goIfAllowed(pathname) {
+  console.log('goIfAllowed(): Attempting to navigate to', pathname);
   if (!isAllowedPath(pathname)) {
     showRouteToast('No estás autorizado para acceder a la página que intentas cargar.', 'error');
     return false;
@@ -34,16 +36,10 @@ function goIfAllowed(pathname) {
 
 (function () {
   const role = sessionStorage.getItem('portal_role') || 'supplier';
-  const redirectTo = sessionStorage.getItem('portal_redirect_to') || '/';
   const allowed = getAllowedPages();
 
   if (!role || !allowed.length) {
     return;
-  }
-
-  const currentPath = window.location.pathname;
-  if (!isAllowedPath(currentPath)) {
-    window.location.replace(allowed[0] || redirectTo || '/');
   }
 })();
 

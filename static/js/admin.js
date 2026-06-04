@@ -66,8 +66,6 @@ async function fetchCurrentUser() {
   });
 
   const raw = await res.text();
-  console.log('/auth/me status:', res.status, 'body:', raw);
-
   if (!res.ok) {
     throw new Error(`auth/me ${res.status}`);
   }

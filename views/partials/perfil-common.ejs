@@ -335,15 +335,11 @@
     </div>
   <% } else { %>
     <div class="profile-actions">
+    <div style="display:flex;justify-content:flex-end;max-width:920px;margin:1rem auto 0">
       <% if (isAdmin) { %>
         <a href="/proveedores" class="btn btn-secondary">Volver</a>
       <% } %>
-    </div>
-    <div style="display:flex;justify-content:flex-end;max-width:920px;margin:1rem auto 0">
-      <a href="/proveedores" class="btn btn-secondary">Volver</a>
-      <% if (isAdmin) { %>
       <button class="btn btn-primary" id="editProfileBtn">Editar</button>
-      <% } %>
     </div>
   <% } %>
 

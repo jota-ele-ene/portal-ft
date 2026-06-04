@@ -1,14 +1,15 @@
 {
   "admin": [
-    "/proveedores", // Ruta por defecto tras login para admin
+    "/proveedores",
     "/perfil",
     "/perfil-edit"
   ],
   "user": [
-    "/proveedores", // Ruta por defecto tras login para admin
-    "/perfil" // Ruta por defecto tras login para user
+    "/proveedores",
+    "/perfil" 
   ],
   "supplier": [
-    "/perfil" // Ruta por defecto tras login para supplier
+    "/perfil",
+    "/perfil-edit"
   ]
 }

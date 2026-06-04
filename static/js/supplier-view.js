@@ -15,9 +15,10 @@
 
   async function fetchProfile() {
     try {
+      console.log('Fetching profile from', profileUrl());
       const res = await fetch(profileUrl(), { headers: {         credentials: 'include' } });
       if (!res.ok) {
-        window.location.href = supplierId ? '/proveedores' : '/perfil-edit';
+        window.location.href = supplierId ? '/perfil' : '/perfil-edit';
         return;
       }
       const data = await res.json();
@@ -75,7 +76,7 @@
       }
     } catch (e) {
       console.error('fetchProfile error', e);
-      window.location.href = supplierId ? '/proveedores' : '/perfil-edit';
+      window.location.href = supplierId ? '/perfil' : '/perfil-edit';
     }
   }
 
@@ -165,6 +166,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('editProfileBtn');
     if (btn) btn.addEventListener('click', () => {
+      console.log('Edit profile button clicked. Navigating to edit page for supplierId:', supplierId);
       window.location.href = supplierId ? `/perfil-edit/${supplierId}` : '/perfil-edit';
     });
 
