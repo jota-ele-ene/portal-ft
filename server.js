@@ -97,6 +97,8 @@ function requireAllowedPage(req, res, next) {
   }
 
   const pathname = req.path;
+  console.log('requireAllowedPage(): Checking access for user role', req.user.role, 'to path', pathname); 
+  console.log('Allowed routes for this role:', allowedRoutes);
   const isAllowed = allowedRoutes.some(route =>
     pathname === route || pathname.startsWith(route + '/')
   );
@@ -172,6 +174,7 @@ app.get('/proveedores', requireAuthPage, (req, res) => {
 });
 
 app.get('/perfil-edit', requireAuthPage, (req, res) => {
+  console.log('Rendering perfil-edit for user', req.user);
   res.render('perfil-edit', {
     title: 'Portal electrónico - Editar perfil',
     supplierId: null,
@@ -181,6 +184,7 @@ app.get('/perfil-edit', requireAuthPage, (req, res) => {
 });
 
 app.get('/perfil', requireAuthPage, (req, res) => {
+  console.log('Rendering perfil for user', req.user);   
   res.render('perfil', {
     title: 'Portal electrónico - Perfil de proveedores',
     supplierId: null,
@@ -190,6 +194,7 @@ app.get('/perfil', requireAuthPage, (req, res) => {
 });
 
 app.get('/perfil/:id', requireAuthPage, (req, res) => {
+  console.log('Rendering perfil for user', req.user, 'with supplierId:', req.params.id);   
   res.render('perfil', {
     title: 'Portal electrónico - Perfil de proveedor',
     supplierId: req.params.id,
@@ -199,6 +204,7 @@ app.get('/perfil/:id', requireAuthPage, (req, res) => {
 });
 
 app.get('/perfil-edit/:id', requireAuthPage, (req, res) => {
+  console.log('Rendering perfil-edit for user', req.user, 'with supplierId:', req.params.id); 
   res.render('perfil-edit', {
     title: 'Portal electrónico - Editar proveedor',
     supplierId: req.params.id,

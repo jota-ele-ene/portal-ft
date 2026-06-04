@@ -11,7 +11,7 @@
     : 'Esta es la información de que disponemos en tu ficha de proveedor. <br>Revísala y edítala cuando necesites actualizarla.';
   
   console.log(JSON.stringify(typeof user !== 'undefined' ? user : locals.user, null, 2));
-
+  console.log('Rendering perfil with mode:', mode, 'supplierId:', supplierId);
 %>
 
 <section class="step active" id="step-form">
@@ -349,6 +349,7 @@
 
   <script>
     window.SUPPLIER_ID = <%- JSON.stringify(supplierId || null) %>;
+    console.log('Initializing perfil page with supplierId:', window.SUPPLIER_ID);
     /**
      * showSendingTab() — muestra la pestaña oculta de progreso y anima la barra.
      * Llamar ANTES de lanzar el fetch al microservicio.

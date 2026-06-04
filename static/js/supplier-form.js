@@ -8,6 +8,7 @@ window.token = window.token || sessionStorage.getItem('portal_token') || null;
 
 // SUPPLIER_ID se inyecta desde la vista EJS cuando el admin edita un proveedor concreto
 const supplierId = window.SUPPLIER_ID || null;
+console.log('Initializing supplier form with supplierId:', supplierId);
 
 
 const currentProfile = { documents: [] };
@@ -29,12 +30,6 @@ const CP_PROVINCES = {
   '41':'Sevilla','42':'Soria','43':'Tarragona','44':'Teruel','45':'Toledo','46':'Valencia','47':'Valladolid','48':'Vizcaya','49':'Zamora',
   '50':'Zaragoza','51':'Ceuta','52':'Melilla'
 };
-
-
-if (!window.token) {
-  window.location.href = '/';
-}
-
 
 // ── Helpers para el overlay de progreso ──────────────────────────────────────
 let _barInterval = null;
@@ -845,6 +840,9 @@ async function handlePostalCodeChange() {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
+
+  console.log('DOMContentLoaded formulario de proveedor...');
+
   await loadBankCodes();
   await loadSupplierData();
 
