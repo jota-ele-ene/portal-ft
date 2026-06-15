@@ -177,10 +177,15 @@ app.get('/proveedores', requireAuthPage, (req, res) => {
 });
 
 app.get('/perfil-edit', requireAuthPage, (req, res) => {
-  console.log('Rendering perfil-edit for user', req.user, req.query.new);
+  // Cuando un admin llega aquí sin ID está creando un nuevo proveedor.
+  // isNewSupplier=true le indica al JS del cliente que NO debe cargar
+  // ningún perfil previo (evita que se rellene con los datos del admin).
+  const isNewSupplier = req.user && req.user.role === 'admin';
+  console.log('Rendering perfil-edit for user', req.user, '— isNewSupplier:', isNewSupplier);
   res.render('perfil-edit', {
     title: 'Portal electrónico - Editar perfil',
     supplierId: null,
+    isNewSupplier,
     mode: 'edit',
     user: req.user
   });
@@ -193,6 +198,7 @@ app.get('/perfil', requireAuthPage, (req, res) => {
     res.render('perfil-edit', {
       title: 'Portal electrónico - Editar perfil',
       supplierId: null,
+      isNewSupplier: false,
       mode: 'edit',
       user: req.user
     });
@@ -221,6 +227,7 @@ app.get('/perfil-edit/:id', requireAuthPage, (req, res) => {
   res.render('perfil-edit', {
     title: 'Portal electrónico - Editar proveedor',
     supplierId: req.params.id,
+    isNewSupplier: false,
     user: req.user,
     mode: 'edit'
   });
@@ -312,7 +319,7 @@ app.get('/branch-address', async (req, res) => {
       body: body.toString()
     });
     const resultHtml = await postRes.text();
-    const addressMatch = resultHtml.match(/var\\s+mapa\\s*=\\s*\"([^\"]+)\"/);
+    const addressMatch = resultHtml.match(/var\s+mapa\s*=\s*\"([^\"]+)\"/);
     const address = addressMatch ? addressMatch[1].trim() : '';
     return res.json({ address });
   } catch (error) {
