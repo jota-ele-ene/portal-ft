@@ -190,6 +190,7 @@ function profileUrl() {
 
 // URL a la que navegar al cancelar
 function cancelUrl() {
+ if (isNewSupplier && !supplierId) return '/proveedores';
   return supplierId ? `/perfil/${supplierId}` : '/perfil';
 }
 
