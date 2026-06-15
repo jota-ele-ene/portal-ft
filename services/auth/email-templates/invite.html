@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invitación al Portal de Proveedores</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6fa;font-family:sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6fa;padding:2rem 0">
+    <tr>
+      <td align="center">
+        <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
+          <!-- Cabecera -->
+          <tr>
+            <td style="background:#1a56db;padding:1.5rem 2rem">
+              <h1 style="margin:0;color:#ffffff;font-size:1.25rem;font-weight:700">Invitación al Portal de Proveedores</h1>
+            </td>
+          </tr>
+          <!-- Cuerpo -->
+          <tr>
+            <td style="padding:2rem">
+              <p style="margin:0 0 .75rem;color:#374151;font-size:1rem">Has sido invitado a acceder al portal utilizando este correo:</p>
+              <p style="margin:0 0 1rem;font-size:1rem;font-weight:600;color:#111827;word-break:break-word">{{email}}</p>
+              <p style="margin:0 0 1.5rem;color:#374151;line-height:1.6;font-size:.95rem">
+                Haz clic en el siguiente enlace para iniciar sesión y gestionar tu perfil de proveedor:
+              </p>
+              <a href="{{portal_url}}" style="display:inline-block;padding:.9rem 1.4rem;background:#1a56db;color:#ffffff;border-radius:.75rem;text-decoration:none;font-weight:600;font-size:.95rem">Abrir Portal</a>
+            </td>
+          </tr>
+          <!-- Pie -->
+          <tr>
+            <td style="padding:1rem 2rem;border-top:1px solid #e5e7eb;background:#f9fafb">
+              <p style="margin:0;color:#9ca3af;font-size:.8rem;line-height:1.5">
+                Si tienes algún problema, contacta a <strong>{{admin_email}}</strong>.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

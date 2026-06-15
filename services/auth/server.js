@@ -53,6 +53,8 @@ const DB_PATH = process.env.AUTH_DB_PATH || path.join(DATA_PATH, 'auth.json');
 const SUPPLIERS_DB_PATH = process.env.GESTION_DB_PATH || path.join(DATA_PATH, 'suppliers.json');
 const ROLES_ROUTES_PATH = path.join(DATA_PATH, 'roles_routes.json');
 
+const TEMPLATES_DIR = path.join(__dirname, 'email-templates');
+
 // ── Mapa de páginas permitidas por rol ───────────────────────────────────────────────
 const DEFAULT_ROLE_PAGES = {
   admin: ['/proveedores', '/perfil', '/perfil-edit'],
@@ -162,6 +164,25 @@ function getDefaultRedirect(role) {
   return pages[0] || '/';
 }
 
+// ── Template engine ──────────────────────────────────────────────────────────────────
+/**
+ * Carga un fichero de plantilla y reemplaza los tokens {{variable}} con los valores
+ * del objeto `vars`. Lanza si el fichero no existe para detectar errores en despliegue.
+ *
+ * @param {string} templateName - Nombre base sin extensión (ej. 'otp', 'invite')
+ * @param {'html'|'txt'} ext    - Extensión del fichero
+ * @param {Record<string,string>} vars - Variables a sustituir
+ * @returns {string}
+ */
+function renderTemplate(templateName, ext, vars) {
+  const filePath = path.join(TEMPLATES_DIR, `${templateName}.${ext}`);
+  let content = fs.readFileSync(filePath, 'utf8');
+  for (const [key, value] of Object.entries(vars)) {
+    content = content.replaceAll(`{{${key}}}`, String(value ?? ''));
+  }
+  return content;
+}
+
 // ── Mailer ───────────────────────────────────────────────────────────────────────────
 function getTransporter() {
   if (!SMTP_USER) return null;
@@ -173,63 +194,23 @@ function getTransporter() {
   });
 }
 
-function buildOtpEmailText(otp) {
-  return `Portal de Proveedores\n\n` +
-         `Tu código de acceso es: ${otp}\n\n` +
-         `Válido durante ${Math.floor(OTP_TTL / 60)} minutos.\n` +
-         `Si no solicitaste este código, ignóralo.\n\n` +
-         `Si necesitas ayuda, contacta a ${ADMIN_EMAIL}.`;
-}
-
-function buildOtpEmailHtml(otp) {
-  return `
-    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:2rem">
-      <h2 style="color:#1a56db">Portal de Proveedores</h2>
-      <p>Tu código de acceso es:</p>
-      <div style="font-size:2.5rem;font-weight:700;letter-spacing:.3em;background:#f0f4ff;padding:1rem;border-radius:8px;text-align:center;color:#1a56db">${otp}</div>
-      <p style="color:#6b7280;font-size:.95rem;margin-top:1rem;line-height:1.5">
-        Válido durante ${Math.floor(OTP_TTL / 60)} minutos.<br>
-        Si no solicitaste este código, ignora este mensaje.
-      </p>
-      <p style="color:#6b7280;font-size:.85rem;line-height:1.5;margin-top:1.5rem">
-        Si necesitas ayuda, contacta a <strong>${ADMIN_EMAIL}</strong>.
-      </p>
-    </div>`;
-}
-
-function buildInviteEmailText(email) {
-  return `Has sido invitado al Portal de Proveedores.\n\n` +
-         `Accede con este correo: ${email}\n` +
-         `Entra al portal aquí: ${PORTAL_URL}\n\n` +
-         `Si tienes algún problema, contacta a ${ADMIN_EMAIL}.`;
-}
-
-function buildInviteEmailHtml(email) {
-  return `
-    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:2rem">
-      <h2 style="color:#1a56db">Invitación al Portal de Proveedores</h2>
-      <p>Has sido invitado a acceder al portal utilizando este correo:</p>
-      <p style="font-size:1rem;font-weight:600;color:#111827;word-break:break-word">${email}</p>
-      <p style="margin-top:1rem;color:#374151;line-height:1.6">
-        Haz clic en el siguiente enlace para iniciar sesión y gestionar tu perfil de proveedor:
-      </p>
-      <a href="${PORTAL_URL}" style="display:inline-block;margin-top:1rem;padding:.9rem 1.2rem;background:#1a56db;color:#fff;border-radius:.75rem;text-decoration:none">Abrir Portal</a>
-      <p style="color:#6b7280;font-size:.85rem;line-height:1.5;margin-top:1.5rem">
-        Si tienes algún problema, contacta a <strong>${ADMIN_EMAIL}</strong>.
-      </p>
-    </div>`;
-}
-
 async function sendOtpEmail(to, otp) {
   const transporter = getTransporter();
   console.log(`[DEV] OTP para ${to}: ${otp}`);
   if (!transporter) return;
+
+  const vars = {
+    otp,
+    otp_ttl_minutes: Math.floor(OTP_TTL / 60),
+    admin_email: ADMIN_EMAIL
+  };
+
   await transporter.sendMail({
     from: SMTP_FROM,
     to,
     subject: `Tu código de acceso: ${otp}`,
-    text: buildOtpEmailText(otp),
-    html: buildOtpEmailHtml(otp)
+    text: renderTemplate('otp', 'txt', vars),
+    html: renderTemplate('otp', 'html', vars)
   });
 }
 
@@ -237,12 +218,19 @@ async function sendInviteEmail(to) {
   const transporter = getTransporter();
   console.log(`[DEV] Invitación para ${to}: ${PORTAL_URL}`);
   if (!transporter) return;
+
+  const vars = {
+    email: to,
+    portal_url: PORTAL_URL,
+    admin_email: ADMIN_EMAIL
+  };
+
   await transporter.sendMail({
     from: SMTP_FROM,
     to,
     subject: 'Invitación al Portal de Proveedores',
-    text: buildInviteEmailText(to),
-    html: buildInviteEmailHtml(to)
+    text: renderTemplate('invite', 'txt', vars),
+    html: renderTemplate('invite', 'html', vars)
   });
 }
 

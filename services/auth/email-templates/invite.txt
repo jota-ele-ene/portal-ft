@@ -1,0 +1,6 @@
+Has sido invitado al Portal de Proveedores.
+
+Accede con este correo: {{email}}
+Entra al portal aquí: {{portal_url}}
+
+Si tienes algún problema, contacta a {{admin_email}}.
