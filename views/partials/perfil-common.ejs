@@ -22,7 +22,12 @@
       <div style="display:flex">
         <div style="color: var(--text-inverse);font-size: .8rem;margin-top:.25rem;background: var(--text-faint);width: fit-content;border-radius: 1em;padding: 0 1em;">Última actualización: <span id="summary_updatedAt"></span></div>
         <div style="margin-left: 0.5em;var(--text-inverse);font-size: .8rem;margin-top:.25rem;width: fit-content;border-radius: 1em;padding: 0 1em;" id="summary_status"></div> 
-      </div>  
+      </div>
+      <!-- Bloque de observaciones de rechazo: sólo visible cuando el estado es 'rechazado' -->
+      <div id="rejection-observations-block" style="display:none;margin-top:.75rem;padding:.75rem 1rem;background:var(--error-highlight,#e0ced7);border-left:4px solid var(--error,#a12c7b);border-radius:0 var(--radius-md,0.5rem) var(--radius-md,0.5rem) 0;max-width:920px;">
+        <strong style="font-size:.85rem;color:var(--error,#a12c7b);">Motivo de rechazo:</strong>
+        <p id="summary_observations" style="margin:.25rem 0 0;font-size:.9rem;color:var(--text,#28251d);"></p>
+      </div>
       <% } %>
     </div>
   </div>

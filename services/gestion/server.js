@@ -380,6 +380,12 @@ app.put('/suppliers/me', authenticate, async (req, res) => {
   updates.updated_at = new Date().toISOString();
 
   if (s) {
+    // Si el proveedor estaba rechazado y edita sus datos, volver a "revision" y limpiar observaciones
+    if (s.status === 'rechazado') {
+      updates.status = 'revision';
+      updates.observations = '';
+      console.log(`[gestion] PUT /suppliers/me: proveedor ${s.id} estaba rechazado → cambiando a 'revision' y borrando observaciones`);
+    }
     Object.assign(s, updates);
   } else {
     s = {
@@ -395,7 +401,7 @@ app.put('/suppliers/me', authenticate, async (req, res) => {
   if (hasMinimum(s) && s.status === 'pendiente') s.status = 'revision';
   saveDB(db);
 
-  // Sincronizar estado en auth.json (nuevo: proveedor pasó a 'revision')
+  // Sincronizar estado en auth.json
   syncUserStatusInAuthDB(email, s.status);
 
   sendResponsibleEmail(s).catch(e => console.error('[gestion] sendResponsibleEmail error:', e.message));
@@ -436,6 +442,14 @@ app.put('/suppliers/admin/:id', authenticate, requireAdmin, async (req, res) => 
   }
 
   updates.updated_at = new Date().toISOString();
+
+  // Si el proveedor estaba rechazado y el admin edita sus datos, volver a "revision" y limpiar observaciones
+  if (s.status === 'rechazado') {
+    updates.status = 'revision';
+    updates.observations = '';
+    console.log(`[gestion] PUT /suppliers/admin/:id: proveedor ${s.id} estaba rechazado → cambiando a 'revision' y borrando observaciones`);
+  }
+
   Object.assign(s, updates);
 
   if (hasMinimum(s) && s.status === 'pendiente') s.status = 'revision';

@@ -67,6 +67,20 @@
         }
         if (id === 'summary_status') setBadge(id, value);
       });
+
+      // Mostrar/ocultar bloque de observaciones de rechazo
+      const obsBlock = document.getElementById('rejection-observations-block');
+      const obsText  = document.getElementById('summary_observations');
+      if (obsBlock && obsText) {
+        if (data.status === 'rechazado' && data.observations) {
+          obsText.textContent = data.observations;
+          obsBlock.style.display = 'block';
+        } else {
+          obsBlock.style.display = 'none';
+          obsText.textContent = '';
+        }
+      }
+
       if (data.codigo_entidad && data.codigo_sucursal) {
         const addressEl = document.getElementById('branchAddressResult');
         if (addressEl) {
