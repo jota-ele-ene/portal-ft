@@ -7,9 +7,10 @@
   const isEdit = mode === 'edit';
   const headerTitle = isEdit ? 'Editar perfil de proveedor' : 'Perfil de proveedor';
   const headerDescription = isEdit
-    ? 'Completa la información en cada pestaña y guarda el borrador o envía para revisión.'
+    ? 'Completa la información en cada pestaña y guarda el borrador o envías para revisión.'
     : 'Esta es la información de que disponemos en tu ficha de proveedor. <br>Revísala y edítala cuando necesites actualizarla.';
-
+  // isNewSupplier se inyecta desde server.js; si no está definida, valor seguro false
+  const _isNew = typeof isNewSupplier !== 'undefined' ? isNewSupplier : false;
 %>
 
 <section class="step active" id="step-form">
@@ -350,7 +351,9 @@
 
   <script>
     window.SUPPLIER_ID = <%- JSON.stringify(supplierId || null) %>;
-    console.log('Initializing perfil page with supplierId:', window.SUPPLIER_ID);
+    // Indica al JS que se está creando un proveedor nuevo (no cargar perfil previo)
+    window.IS_NEW_SUPPLIER = <%- JSON.stringify(_isNew) %>;
+    console.log('Initializing perfil page with supplierId:', window.SUPPLIER_ID, 'isNewSupplier:', window.IS_NEW_SUPPLIER);
     /**
      * showSendingTab() — muestra la pestaña oculta de progreso y anima la barra.
      * Llamar ANTES de lanzar el fetch al microservicio.
