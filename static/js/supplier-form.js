@@ -578,6 +578,13 @@ async function saveSupplierData(submit = false) {
   }
 
   const body = collectSupplierData();
+
+  // Al enviar para revisión, forzar estado 'revision' para que el admin lo revise.
+  // En borrador no se cambia el estado.
+  if (submit) {
+    body.status = 'revision';
+  }
+
   const btn = document.getElementById('submitFormBtn');
   if (btn) btn.disabled = true;
 
