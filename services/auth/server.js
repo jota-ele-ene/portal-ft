@@ -26,7 +26,7 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 8001;
 
-// ── Config ─────────────────────────────────────────────────────────────────────
+// ── Config ──────────────────────────────────────────────────────────────────────
 const OTP_TTL = parseInt(process.env.OTP_TTL_SECONDS || '300', 10);
 const SMTP_HOST = process.env.SMTP_HOST || 'localhost';
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
@@ -53,17 +53,17 @@ const DB_PATH = process.env.AUTH_DB_PATH || path.join(DATA_PATH, 'auth.json');
 const SUPPLIERS_DB_PATH = process.env.GESTION_DB_PATH || path.join(DATA_PATH, 'suppliers.json');
 const ROLES_ROUTES_PATH = path.join(DATA_PATH, 'roles_routes.json');
 
-// ── Mapa de páginas permitidas por rol ────────────────────────────────────────
+// ── Mapa de páginas permitidas por rol ───────────────────────────────────────────────
 const DEFAULT_ROLE_PAGES = {
   admin: ['/proveedores', '/perfil', '/perfil-edit'],
   user: ['/proveedores', '/perfil'],
   supplier: ['/perfil']
 };
 
-// ── App settings ───────────────────────────────────────────────────────────────
+// ── App settings ───────────────────────────────────────────────────────────────────
 app.set('trust proxy', 1);
 
-// ── Middlewares globales ──────────────────────────────────────────────────────
+// ── Middlewares globales ────────────────────────────────────────────────────────────────
 app.use(cors({
   origin: FRONTEND_ORIGIN || true,
   credentials: true
@@ -85,7 +85,7 @@ app.use(session({
   }
 }));
 
-// ── TinyDB-style JSON store ───────────────────────────────────────────────────
+// ── TinyDB-style JSON store ──────────────────────────────────────────────────────────────
 function sanitizeAuthDB(db) {
   db = db || {};
   if (!Array.isArray(db.otp_codes)) db.otp_codes = [];
@@ -150,7 +150,7 @@ function loadRoleRoutes() {
   }
 }
 
-// ── Helpers de rol y redirección ──────────────────────────────────────────────
+// ── Helpers de rol y redirección ───────────────────────────────────────────────────────────
 function getAllowedPages(role) {
   const rolesRoutes = loadRoleRoutes();
   const pages = rolesRoutes[String(role || '').trim()] || DEFAULT_ROLE_PAGES[role] || ['/'];
@@ -162,7 +162,7 @@ function getDefaultRedirect(role) {
   return pages[0] || '/';
 }
 
-// ── Mailer ─────────────────────────────────────────────────────────────────────
+// ── Mailer ───────────────────────────────────────────────────────────────────────────
 function getTransporter() {
   if (!SMTP_USER) return null;
   return nodemailer.createTransport({
@@ -246,7 +246,7 @@ async function sendInviteEmail(to) {
   });
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────────────────────────
 function generateOtp() {
   return String(crypto.randomInt(100000, 999999));
 }
@@ -272,18 +272,24 @@ function getOrCreateUser(db, email) {
   return user;
 }
 
+/**
+ * Actualiza el status de un usuario en el objeto db (en memoria).
+ * La persistencia queda a cargo del caller mediante saveDB(db).
+ *
+ * @param {object} db     - Objeto cargado de auth.json
+ * @param {string} email  - Email del usuario a actualizar
+ * @param {string} status - Nuevo estado
+ * @returns {object|null} El usuario actualizado, o null si no se encontró
+ */
 function updateUserStatus(db, email, status) {
   const user = db.users.find(u => u.email === email);
-  if (user) {
-    user.status = status;
-  }
+  if (!user) return null;
+  user.status = status;
   user.updated_at = new Date().toISOString();
-
-  saveDB(db);
-  res.json({ message: 'Usuario actualizado correctamente.', user });
+  return user;
 }
 
-// ── Middlewares de autenticación y autorización ─────────────────────────────
+// ── Middlewares de autenticación y autorización ───────────────────────────────────────────
 
 function authenticate(req, res, next) {
   if (!req.session?.user) {
@@ -307,7 +313,7 @@ function requireAdminUser(req, res, next) {
   next();
 }
 
-// ── Rutas ──────────────────────────────────────────────────────────────────────
+// ── Rutas ──────────────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) =>
   res.json({ status: 'ok', service: 'auth' })
 );
@@ -542,7 +548,7 @@ app.post('/auth/logout', authenticate, (req, res) => {
   });
 });
 
-// ── Start / Export ─────────────────────────────────────────────────────────────
+// ── Start / Export ────────────────────────────────────────────────────────────────────────
 if (require.main === module) {
   app.listen(PORT, '0.0.0.0', () =>
     console.log(`[auth] Puerto ${PORT}`)
