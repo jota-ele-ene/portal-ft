@@ -168,17 +168,70 @@ function saveDB(data) {
 
 function loadAuthDB() {
   try {
-    if (!fs.existsSync(AUTH_DB_PATH)) return { revoked_tokens: [] };
+    if (!fs.existsSync(AUTH_DB_PATH)) return { users: [], otp_codes: [], revoked_tokens: [] };
     return JSON.parse(fs.readFileSync(AUTH_DB_PATH, 'utf8'));
   } catch {
-    return { revoked_tokens: [] };
+    return { users: [], otp_codes: [], revoked_tokens: [] };
   }
+}
+
+function saveAuthDB(data) {
+  fs.mkdirSync(path.dirname(AUTH_DB_PATH), { recursive: true });
+  fs.writeFileSync(AUTH_DB_PATH, JSON.stringify(data, null, 2), 'utf8');
 }
 
 function isTokenRevoked(jti) {
   if (!jti) return false;
   const db = loadAuthDB();
   return Array.isArray(db.revoked_tokens) && db.revoked_tokens.some(item => item.jti === jti);
+}
+
+/**
+ * Mapea el estado del proveedor (suppliers.json) al estado del usuario (auth.json).
+ *
+ * Mapa:
+ *   pendiente → active   (el proveedor existe, puede acceder)
+ *   revision  → active   (en revisión, sigue activo)
+ *   aprobado  → active   (aprobado definitivamente)
+ *   rechazado → disabled (se deniega el acceso)
+ */
+function supplierStatusToUserStatus(supplierStatus) {
+  const map = {
+    pendiente: 'active',
+    revision:  'active',
+    aprobado:  'active',
+    rechazado: 'disabled'
+  };
+  return map[supplierStatus] || 'active';
+}
+
+/**
+ * Sincroniza el estado del proveedor en el registro de usuario de auth.json.
+ * Busca al usuario por email y actualiza su campo `status`.
+ *
+ * @param {string} email          - Email del proveedor
+ * @param {string} supplierStatus - Nuevo estado en suppliers.json
+ */
+function syncUserStatusInAuthDB(email, supplierStatus) {
+  if (!email) return;
+  try {
+    const authDB = loadAuthDB();
+    if (!Array.isArray(authDB.users)) return;
+
+    const userStatus = supplierStatusToUserStatus(supplierStatus);
+    const user = authDB.users.find(u => u.email === email.toLowerCase().trim());
+
+    if (user) {
+      user.status = userStatus;
+      user.updated_at = new Date().toISOString();
+      saveAuthDB(authDB);
+      console.log(`[gestion] auth.json actualizado: usuario ${email} → status '${userStatus}' (proveedor '${supplierStatus}')`);
+    } else {
+      console.warn(`[gestion] syncUserStatusInAuthDB: no se encontró usuario con email '${email}' en auth.json`);
+    }
+  } catch (e) {
+    console.error('[gestion] Error sincronizando estado en auth.json:', e.message);
+  }
 }
 
 /**
@@ -320,7 +373,7 @@ app.get('/suppliers/admin/:id', authenticate, (req, res) => {
   res.json(s);
 });
 
-app.put('/suppliers/admin/:id', authenticate, async (req, res) => {
+app.put('/suppliers/admin/:id', authenticate, requireAdmin, async (req, res) => {
   const db = loadDB();
   const s = db.suppliers.find(x => x.id === req.params.id);
   if (!s) return res.status(404).json({ detail: 'Proveedor no encontrado.' });
@@ -345,16 +398,17 @@ app.put('/suppliers/admin/:id', authenticate, async (req, res) => {
 
   if (hasMinimum(s) && s.status === 'pendiente') s.status = 'revision';
 
-  updateUserStatus(db, s.email, 'active')  
-  
   saveDB(db);
+
+  // Sincronizar estado en auth.json
+  syncUserStatusInAuthDB(s.email, s.status);
 
   sendResponsibleEmail(s).catch(e => console.error('[gestion] sendResponsibleEmail error:', e.message));
 
   res.json(s);
 });
 
-app.patch('/suppliers/admin/:id/status', authenticate, (req, res) => {
+app.patch('/suppliers/admin/:id/status', authenticate, requireAdmin, (req, res) => {
   const { status } = req.body;
 
   if (!VALID_STATUSES.has(status)) {
@@ -370,6 +424,9 @@ app.patch('/suppliers/admin/:id/status', authenticate, (req, res) => {
   s.status = status;
   s.updated_at = new Date().toISOString();
   saveDB(db);
+
+  // Sincronizar el nuevo estado del proveedor en auth.json
+  syncUserStatusInAuthDB(s.email, status);
 
   res.json(s);
 });
