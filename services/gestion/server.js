@@ -76,6 +76,18 @@ function createTransport() {
   });
 }
 
+/**
+ * Replica la misma lógica de sanitización de email que usa el servicio
+ * de archivos (services/archivos/server.js) para construir el slug de
+ * la carpeta donde se almacenan los documentos subidos.
+ *
+ * @param {string} email
+ * @returns {string}
+ */
+function sanitizeEmail(email) {
+  return (email || 'unknown').replace(/[^a-zA-Z0-9@._\-]/g, '_');
+}
+
 async function sendResponsibleEmail(supplier) {
   const to = supplier.responsible_email || process.env.DEFAULT_RESPONSIBLE_EMAIL;
   if (!to) {
@@ -86,7 +98,14 @@ async function sendResponsibleEmail(supplier) {
   const tpl = loadEmailTemplate('perfil-actualizado');
   if (!tpl) return;
 
-  const supplierDocsDir = path.join(DATA_PATH, 'documents', supplier.id || '');
+  // ── Ruta correcta de documentos ──────────────────────────────────────────────
+  // El servicio de archivos guarda los ficheros en:
+  //   DATA_PATH/uploads/<sanitizeEmail(supplier.email)>/
+  // (mismo algoritmo sanitizeEmail que services/archivos/server.js)
+  const supplierEmail = supplier.email || supplier.email_contacto || '';
+  const emailSlug = sanitizeEmail(supplierEmail);
+  const supplierDocsDir = path.join(DATA_PATH, 'uploads', emailSlug);
+
   const docs = Array.isArray(supplier.documents) ? supplier.documents : [];
 
   const document_names = docs.length
@@ -132,7 +151,10 @@ async function sendResponsibleEmail(supplier) {
       const filename = doc.filename;
       if (!filename) return null;
       const fullPath = path.join(supplierDocsDir, filename);
-      if (!fs.existsSync(fullPath)) return null;
+      if (!fs.existsSync(fullPath)) {
+        console.warn(`[gestion] Adjunto no encontrado: ${fullPath}`);
+        return null;
+      }
       return {
         filename: doc.original || filename,
         path: fullPath
