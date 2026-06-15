@@ -9,9 +9,6 @@
   const headerDescription = isEdit
     ? 'Completa la información en cada pestaña y guarda el borrador o envía para revisión.'
     : 'Esta es la información de que disponemos en tu ficha de proveedor. <br>Revísala y edítala cuando necesites actualizarla.';
-  
-  console.log(JSON.stringify(typeof user !== 'undefined' ? user : locals.user, null, 2));
-  console.log('Rendering perfil with mode:', mode, 'supplierId:', supplierId);
 
 %>
 
@@ -21,7 +18,10 @@
       <h1><%= headerTitle %></h1>
       <p style="color:var(--text-muted);font-size:.9rem;margin-top:.25rem"><%- headerDescription %></p>
       <% if (!isEdit) { %>
-      <p style="color: var(--text-inverse);font-size: .8rem;margin-top:.25rem;background: var(--text-faint);width: fit-content;border-radius: 1em;padding: 0 1em;">Última actualización: <span id="summary_updatedAt"></span></p>
+      <div style="display:flex">
+        <div style="color: var(--text-inverse);font-size: .8rem;margin-top:.25rem;background: var(--text-faint);width: fit-content;border-radius: 1em;padding: 0 1em;">Última actualización: <span id="summary_updatedAt"></span></div>
+        <div style="margin-left: 0.5em;var(--text-inverse);font-size: .8rem;margin-top:.25rem;width: fit-content;border-radius: 1em;padding: 0 1em;" id="summary_status"></div> 
+      </div>  
       <% } %>
     </div>
   </div>

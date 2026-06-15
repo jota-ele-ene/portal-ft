@@ -25,7 +25,7 @@ function isAllowedPath(pathname) {
 
 function goIfAllowed(pathname) {
   console.log('goIfAllowed(): Attempting to navigate to', pathname);
-  if (!isAllowedPath(pathname)) {
+  if (!isAllowedPath(pathname.split('?')[0])) {
     showRouteToast('No estás autorizado para acceder a la página que intentas cargar.', 'error');
     return false;
   }

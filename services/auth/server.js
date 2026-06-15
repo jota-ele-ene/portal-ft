@@ -468,7 +468,7 @@ app.post('/auth/invite', authenticate, requireAdminUser, async (req, res) => {
       supplier = {
         id: crypto.randomUUID(),
         alias: name ? name.trim() : '',
-        email_contacto: emailLower,
+        email: emailLower,
         status: 'pendiente',
         responsible_email: responsibleEmail,
         created_at: new Date().toISOString(),
@@ -477,7 +477,7 @@ app.post('/auth/invite', authenticate, requireAdminUser, async (req, res) => {
       sdb.suppliers.push(supplier);
     } else {
       supplier.alias = name ? name.trim() : supplier.alias || '';
-      supplier.email_contacto = emailLower;
+      supplier.email = emailLower;
       supplier.responsible_email = responsibleEmail;
       supplier.updated_at = new Date().toISOString();
     }

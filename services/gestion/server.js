@@ -213,6 +213,7 @@ function supplierStatusToUserStatus(supplierStatus) {
  * @param {string} supplierStatus - Nuevo estado en suppliers.json
  */
 function syncUserStatusInAuthDB(email, supplierStatus) {
+  console.log(`[gestion] syncUserStatusInAuthDB: sincronizando estado para ${email} → '${supplierStatus}'`);  
   if (!email) return;
   try {
     const authDB = loadAuthDB();
@@ -221,6 +222,7 @@ function syncUserStatusInAuthDB(email, supplierStatus) {
     const userStatus = supplierStatusToUserStatus(supplierStatus);
     const user = authDB.users.find(u => u.email === email.toLowerCase().trim());
 
+    console.log(`[gestion] syncUserStatusInAuthDB: usuario encontrado en auth.json:`, !!user, `actualizando status a '${userStatus}'`);
     if (user) {
       user.status = userStatus;
       user.updated_at = new Date().toISOString();
@@ -278,22 +280,31 @@ function requireAdmin(req, res, next) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function getOrCreate(db, email) {
-  let s = db.suppliers.find(x => x.email === email);
+  let s = db.suppliers.find(x => x.email_contacto === email || x.email === email);
+
   if (!s) {
     s = {
       id: crypto.randomUUID(),
       email,
-      status: 'pendiente',
+      status: 'nuevo',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-    db.suppliers.push(s);
+    //db.suppliers.push(s);
   }
   return s;
 }
 
 function hasMinimum(s) {
   return s.razon_social && s.nif && s.persona_contacto && s.iban;
+}
+
+function updateUserStatus(db, email, status) {
+  const user = db.users.find(u => u.email === email);
+  if (!user) return null;
+  user.status = status;
+  user.updated_at = new Date().toISOString();
+  return user;
 }
 
 const ALLOWED_FIELDS = [
@@ -338,6 +349,12 @@ app.put('/suppliers/me', authenticate, async (req, res) => {
     }));
   }
 
+  if (!s?.responsible_email) {
+    updates.responsible_email = req.user.email || req.user.sub;
+    updates.mail = "";
+    updates.email_contacto = "";
+  }
+
   updates.updated_at = new Date().toISOString();
 
   if (s) {
@@ -355,6 +372,9 @@ app.put('/suppliers/me', authenticate, async (req, res) => {
 
   if (hasMinimum(s) && s.status === 'pendiente') s.status = 'revision';
   saveDB(db);
+
+  // Sincronizar estado en auth.json (nuevo: proveedor pasó a 'revision')
+  syncUserStatusInAuthDB(email, s.status);
 
   sendResponsibleEmail(s).catch(e => console.error('[gestion] sendResponsibleEmail error:', e.message));
 

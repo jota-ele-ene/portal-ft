@@ -46,6 +46,7 @@
         summary_banco: data.banco,
         summary_sucursal: data.sucursal,
         summary_moneda_pago: data.moneda_pago || 'EUR',
+        summary_status: data.status,
         summary_updatedAt: new Date(data.updated_at).toLocaleString('es-ES', { dateStyle: 'long' }),
         summary_docs: (currentProfile.documents && currentProfile.documents.length) ? 'Subidos' : 'Pendiente',
         summary_files: (currentProfile.documents && currentProfile.documents.length)
@@ -64,6 +65,7 @@
         } else {
           el.textContent = value || '—';
         }
+        if (id === 'summary_status') setBadge(id, value);
       });
       if (data.codigo_entidad && data.codigo_sucursal) {
         const addressEl = document.getElementById('branchAddressResult');
@@ -154,6 +156,14 @@
       console.error('delete error', err);
       alert(err.message || 'Error al eliminar el documento.');
     }
+  }
+
+  function setBadge(id, status) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const labels = { pendiente:'Pendiente', revision:'En revisión', aprobado:'Aprobado ', rechazado:'Rechazado' };
+    el.className = `badge badge-${status}`;
+    el.textContent = labels[status] || status;
   }
 
   function setActiveTab(index) {

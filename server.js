@@ -177,7 +177,7 @@ app.get('/proveedores', requireAuthPage, (req, res) => {
 });
 
 app.get('/perfil-edit', requireAuthPage, (req, res) => {
-  console.log('Rendering perfil-edit for user', req.user);
+  console.log('Rendering perfil-edit for user', req.user, req.query.new);
   res.render('perfil-edit', {
     title: 'Portal electrónico - Editar perfil',
     supplierId: null,
