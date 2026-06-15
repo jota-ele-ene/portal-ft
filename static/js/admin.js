@@ -3,6 +3,7 @@ window.API = window.API || (window.__API_BASE__ || window.APP_BASE).replace(/\/$
 
 let allSuppliers = [];
 let adminEmailLocal = '';
+let pendingRejectedStatusId = '';
 
 console.log('Admin dashboard JS cargado en', window.location.pathname);
 
@@ -255,7 +256,7 @@ function renderTable(suppliers) {
           st => `
             <button
               class="status-option"
-              onclick="updateStatus('${s.id}','${st}');closeStatusDropdown(this)"
+              onclick="handleStatusAction('${s.id}','${st}', this)"
               style="display:block;width:100%;text-align:left;padding:.4rem .75rem;border:none;background:none;cursor:pointer;font-size:.82rem;color:var(--text)"
             >
               ${STATUS_LABELS[st]}
@@ -322,7 +323,53 @@ function closeStatusDropdown(optionBtn) {
   if (dropdown) dropdown.style.display = 'none';
 }
 
-async function updateStatus(id, status) {
+function openRejectStatusModal(id) {
+  pendingRejectedStatusId = id;
+  const modal = document.getElementById('rejectStatusModal');
+  const input = document.getElementById('rejectObservations');
+  const error = document.getElementById('rejectObservationsError');
+  const hidden = document.getElementById('rejectSupplierId');
+  if (hidden) hidden.value = id;
+  if (input) input.value = '';
+  if (error) {
+    error.textContent = '';
+    error.style.display = 'none';
+  }
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeRejectStatusModal() {
+  const modal = document.getElementById('rejectStatusModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function handleStatusAction(id, status, btn) {
+  closeStatusDropdown(btn);
+  if (status === 'rechazado') {
+    openRejectStatusModal(id);
+    return;
+  }
+  await updateStatus(id, status);
+}
+
+async function confirmRejectStatusChange() {
+  const id = document.getElementById('rejectSupplierId')?.value || pendingRejectedStatusId;
+  const observations = (document.getElementById('rejectObservations')?.value || '').trim();
+  const error = document.getElementById('rejectObservationsError');
+
+  if (!observations) {
+    if (error) {
+      error.textContent = 'Debes indicar las observaciones del rechazo.';
+      error.style.display = 'block';
+    }
+    return;
+  }
+
+  await updateStatus(id, 'rechazado', observations);
+  closeRejectStatusModal();
+}
+
+async function updateStatus(id, status, observations = '') {
   if (!status) return;
 
   try {
@@ -333,7 +380,7 @@ async function updateStatus(id, status) {
         Accept: 'application/json',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ status })
+      body: JSON.stringify({ status, observations })
     });
 
     const data = await res.json().catch(() => ({}));

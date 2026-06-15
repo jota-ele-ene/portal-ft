@@ -76,6 +76,24 @@
       </div>
     </div>
   </div>
+
+  <div id="rejectStatusModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.65);backdrop-filter:blur(2px);align-items:center;justify-content:center;z-index:1000;padding:1rem;">
+    <div style="width:min(100%,620px);background:var(--surface);border-radius:1rem;padding:1.5rem;box-shadow:0 22px 60px rgba(15,23,42,.28);position:relative;">
+      <button type="button" onclick="closeRejectStatusModal()" aria-label="Cerrar" style="position:absolute;top:1rem;right:1rem;border:none;background:none;color:var(--text);font-size:1.25rem;cursor:pointer">×</button>
+      <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:1rem">Motivo del rechazo</h2>
+      <p style="color:var(--text-muted);margin-bottom:1rem">Indica las observaciones que se comunicarán al proveedor para que pueda volver a entrar al portal y corregir su información.</p>
+      <input type="hidden" id="rejectSupplierId">
+      <div class="form-group">
+        <label class="form-label" for="rejectObservations">Observaciones</label>
+        <textarea id="rejectObservations" class="form-control" rows="5" placeholder="Escribe el motivo del rechazo"></textarea>
+        <p class="field-error" id="rejectObservationsError" style="display:none"></p>
+      </div>
+      <div style="display:flex;gap:.75rem;flex-wrap:wrap;justify-content:flex-end;margin-top:1rem;">
+        <button class="btn btn-secondary" type="button" onclick="closeRejectStatusModal()">Cancelar</button>
+        <button class="btn btn-primary" type="button" onclick="confirmRejectStatusChange()">Guardar rechazo</button>
+      </div>
+    </div>
+  </div>
 `,
   scripts: ['/static/js/admin.js']
 }) %>

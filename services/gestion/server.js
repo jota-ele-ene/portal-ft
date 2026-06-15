@@ -450,12 +450,50 @@ app.put('/suppliers/admin/:id', authenticate, requireAdmin, async (req, res) => 
   res.json(s);
 });
 
-app.patch('/suppliers/admin/:id/status', authenticate, requireAdmin, (req, res) => {
-  const { status } = req.body;
+async function sendSupplierRejectionEmail(supplier, observations) {
+  const to = supplier.email || supplier.responsible_email || process.env.DEFAULT_RESPONSIBLE_EMAIL;
+  if (!to) {
+    console.warn(`[gestion] sendSupplierRejectionEmail: proveedor ${supplier.id} sin email de destino`);
+    return;
+  }
+
+  const tpl = loadEmailTemplate('supplier-rejected');
+  if (!tpl) return;
+
+  const supplierName = supplier.alias || supplier.razon_social || supplier.nombre_comercial || supplier.name || supplier.email || 'proveedor';
+  const portalUrl = process.env.PORTAL_URL || process.env.PORTAL_FRONTEND_URL || process.env.FRONTEND_ORIGIN || 'http://localhost:8000';
+
+  const { subject, html, text } = renderTemplate(tpl, {
+    supplier_name: supplierName,
+    observations: observations || '',
+    portal_url: portalUrl,
+    admin_email: process.env.ADMIN_EMAIL || process.env.DEFAULT_RESPONSIBLE_EMAIL || ''
+  });
+
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'portal@empresa.local';
+
+  try {
+    const transport = createTransport();
+    await transport.sendMail({ from, to, subject, html, text });
+    console.log(`[gestion] Correo de rechazo enviado a ${to} para proveedor ${supplier.id}`);
+  } catch (e) {
+    console.error('[gestion] Error enviando correo de rechazo:', e.message);
+  }
+}
+
+app.patch('/suppliers/admin/:id/status', authenticate, requireAdmin, async (req, res) => {
+  const { status, observations } = req.body;
 
   if (!VALID_STATUSES.has(status)) {
     return res.status(400).json({
       detail: `Estado inválido. Válidos: ${[...VALID_STATUSES].join(', ')}`
+    });
+  }
+
+  const rejectionNote = String(observations || '').trim();
+  if (status === 'rechazado' && !rejectionNote) {
+    return res.status(400).json({
+      detail: 'Las observaciones son obligatorias cuando el proveedor se marca como rechazado.'
     });
   }
 
@@ -465,10 +503,16 @@ app.patch('/suppliers/admin/:id/status', authenticate, requireAdmin, (req, res) 
 
   s.status = status;
   s.updated_at = new Date().toISOString();
+  s.observations = status === 'rechazado' ? rejectionNote : '';
+
   saveDB(db);
 
-  // Sincronizar el nuevo estado del proveedor en auth.json
-  syncUserStatusInAuthDB(s.email, status);
+  // Mantener acceso al portal incluso si está rechazado, para que pueda corregir datos.
+  syncUserStatusInAuthDB(s.email, status === 'rechazado' ? 'revision' : status);
+
+  if (status === 'rechazado') {
+    await sendSupplierRejectionEmail(s, rejectionNote);
+  }
 
   res.json(s);
 });
