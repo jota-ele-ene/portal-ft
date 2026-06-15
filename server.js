@@ -116,6 +116,9 @@ app.use('/data', express.static(DATA_DIR));
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
 app.use((req, res, next) => {
   req.user = req.session?.user || null;
   res.locals.user = req.user || null;
@@ -184,7 +187,17 @@ app.get('/perfil-edit', requireAuthPage, (req, res) => {
 });
 
 app.get('/perfil', requireAuthPage, (req, res) => {
-  console.log('Rendering perfil for user', req.user);   
+  const thisUser = req.user;
+  console.log('Rendering perfil for user', thisUser);   
+  if (thisUser?.status === 'invited') {
+    res.render('perfil-edit', {
+      title: 'Portal electrónico - Editar perfil',
+      supplierId: null,
+      mode: 'edit',
+      user: req.user
+    });
+    return;
+  }
   res.render('perfil', {
     title: 'Portal electrónico - Perfil de proveedores',
     supplierId: null,

@@ -3,8 +3,6 @@
 // '/perfil-edit', que es incorrecto. Siempre usamos la raíz '/'.
 window.APP_BASE = '';
 window.API = window.__API_BASE__ || '';
-window.token = window.token || sessionStorage.getItem('portal_token') || null;
-
 
 // SUPPLIER_ID se inyecta desde la vista EJS cuando el admin edita un proveedor concreto
 const supplierId = window.SUPPLIER_ID || null;
@@ -196,9 +194,8 @@ function cancelUrl() {
 
 
 async function loadSupplierData() {
-  if (!window.token) return;
   try {
-    const res = await fetch(profileUrl(), { headers: { 'Authorization': 'Bearer ' + window.token } });
+    const res = await fetch(profileUrl(), { credentials: 'include' });
     if (!res.ok) return;
     const data = await res.json();
     ['razon_social','nombre_comercial','nif','actividad','codigo_postal','ciudad',
@@ -220,6 +217,7 @@ async function loadSupplierData() {
     } else if (monedaEl) {
       monedaEl.value = 'EUR';
     }
+
     const tipoViaEl = document.getElementById('tipo_via');
     const dirEl = document.getElementById('direccion');
     if (tipoViaEl && data.tipo_via) tipoViaEl.value = data.tipo_via;
@@ -228,13 +226,16 @@ async function loadSupplierData() {
       if (tipoViaEl && !tipoViaEl.value && parsed.tipo) tipoViaEl.value = parsed.tipo;
       dirEl.value = parsed.direccion;
     }
+
     if (data.iban) {
       await extractIbanData();
     }
+
     const altaEl = document.getElementById('alta_036');
     if (altaEl) {
       altaEl.value = data.alta_036 === true ? 'true' : data.alta_036 === false ? 'false' : 'none';
     }
+
     currentProfile.documents = Array.isArray(data.documents) ? data.documents : [];
     renderUploadedDocs(currentProfile.documents);
     updateStatusBadges(data);
@@ -242,7 +243,6 @@ async function loadSupplierData() {
     console.error('Error loading profile', error);
   }
 }
-
 
 function renderUploadedDocs(documents) {
   const container = document.getElementById('uploadedDocs');
@@ -278,10 +278,10 @@ function renderUploadedDocs(documents) {
 
 
 async function openDocument(filename) {
-  if (!filename || !window.token) return;
+  if (!filename) return;
   try {
     const res = await fetch(`/documents/download/${filename}`, {
-      headers: { 'Authorization': 'Bearer ' + window.token }
+      credentials: 'include'
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => null);
@@ -296,7 +296,6 @@ async function openDocument(filename) {
     showToast(err.message || 'Error al abrir el documento.', 'error');
   }
 }
-
 
 function updateStatusBadges(data) {
   if (data.razon_social && data.nif && data.direccion) setBadge('statusFiscal','aprobado');
@@ -548,9 +547,7 @@ function collectSupplierData() {
 
 async function saveDraft() { await saveSupplierData(false); }
 
-
 async function saveSupplierData(submit = false) {
-  if (!window.token) { showToast('Sesión no iniciada.', 'error'); return; }
   const errors = validateFormFields();
   if (submit && errors.length) {
     showToast(errors.join(' '), 'error');
@@ -575,14 +572,15 @@ async function saveSupplierData(submit = false) {
   const btn = document.getElementById('submitFormBtn');
   if (btn) btn.disabled = true;
 
-  // Mostrar pestaña de carga (solo en envío final, no en borrador)
   if (submit && typeof showSendingTab === 'function') {
     showSendingTab();
   }
 
   try {
     const res = await fetch(profileUrl(), {
-      method: 'PUT', headers: { 'Authorization': 'Bearer ' + window.token, 'Content-Type': 'application/json' },
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     if (!res.ok) {
@@ -602,7 +600,6 @@ async function saveSupplierData(submit = false) {
     if (btn) btn.disabled = false;
   }
 }
-
 
 function showToast(msg, type = '', onHide) {
   const t = document.getElementById('toast');
@@ -677,7 +674,9 @@ async function submitDocumentUpload() {
 
   try {
     const res = await fetch(`/documents/upload`, {
-      method: 'POST', headers: { 'Authorization': 'Bearer ' + window.token }, body: form
+      method: 'POST',
+      credentials: 'include',
+      body: form
     });
     if (!res.ok) {
       const err = await res.json().catch(() => null);
@@ -701,12 +700,12 @@ async function submitDocumentUpload() {
   }
 }
 
-
 async function saveDocumentMetadata(documents) {
-  if (!window.token) return;
   try {
     const res = await fetch(profileUrl(), {
-      method: 'PUT', headers: { 'Authorization': 'Bearer ' + window.token, 'Content-Type': 'application/json' },
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ documents })
     });
     if (!res.ok) {
@@ -720,17 +719,16 @@ async function saveDocumentMetadata(documents) {
   }
 }
 
-
 function handleFiles(files) {
   return;
 }
 
 
 async function downloadDocument(filename) {
-  if (!filename || !window.token) return;
+  if (!filename) return;
   try {
     const res = await fetch(`/documents/download/${filename}`, {
-      headers: { 'Authorization': 'Bearer ' + window.token }
+      credentials: 'include'
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => null);
@@ -751,20 +749,21 @@ async function downloadDocument(filename) {
   }
 }
 
-
 async function deleteDocument(filename) {
-  if (!filename || !window.token) return;
+  if (!filename) return;
   if (!confirm('¿Eliminar este documento?')) return;
   try {
     const res = await fetch(`/documents/${filename}`, {
       method: 'DELETE',
-      headers: { 'Authorization': 'Bearer ' + window.token }
+      credentials: 'include'
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => null);
       throw new Error(errData?.detail || 'No se pudo eliminar el documento.');
     }
-    currentProfile.documents = currentProfile.documents.filter(doc => encodeURIComponent(doc.filename) !== filename);
+    currentProfile.documents = currentProfile.documents.filter(
+      doc => encodeURIComponent(doc.filename) !== filename
+    );
     await saveDocumentMetadata(currentProfile.documents);
     renderUploadedDocs(currentProfile.documents);
   } catch (err) {
@@ -772,7 +771,6 @@ async function deleteDocument(filename) {
     showToast(err.message || 'Error al eliminar el documento.', 'error');
   }
 }
-
 
 function setActiveTab(index) {
   const tabs = Array.from(document.querySelectorAll('.tabs .tab:not(.tab-sending)'));

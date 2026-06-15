@@ -5,8 +5,6 @@
   const viewUser = typeof user !== 'undefined'
     ? user
     : (typeof locals !== 'undefined' ? locals.user : null);
-  console.log('perfil.ejs: scriptSrc =', scriptSrc);
-  console.log('perfil.ejs:  Received variables - mode:', modeValue, 'supplierId:', supplierId, 'user:', viewUser);
 %>
 <%- include('layout', {
   title: title,

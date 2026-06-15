@@ -16,6 +16,7 @@ const cors       = require('cors');
 const path       = require('path');
 const fs         = require('fs');
 const mime       = require('mime-types');
+const session    = require('express-session');
 
 const app  = express();
 const PORT = process.env.PORT || 8003;
@@ -32,13 +33,35 @@ const MAX_SIZE_MB  = parseInt(process.env.MAX_FILE_SIZE_MB || '10');
 app.use(cors());
 app.use(express.json({ limit: `${MAX_SIZE_MB * 2}mb` }));
 app.use(express.urlencoded({ limit: `${MAX_SIZE_MB * 2}mb`, extended: true }));
+app.use(session({
+  name: process.env.SESSION_COOKIE_NAME || 'portal.sid',
+  secret: process.env.SESSION_SECRET || 'cambia-esta-clave-de-sesion',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: false,
+    maxAge: (parseInt(process.env.TOKEN_EXPIRE_MINUTES || '120')) * 60 * 1000
+  }
+}));
 app.use('/static', express.static(STATIC_DIR));
 
 // ── Auth middleware ────────────────────────────────────────────────────────
 function authenticate(req, res, next) {
+  if (req.session && req.session.user) {
+    req.user = {
+      id: req.session.user.id || null,
+      sub: req.session.user.email,
+      email: req.session.user.email,
+      role: req.session.user.role
+    };
+    return next();
+  }
+
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) {
-    return res.status(401).json({ detail: 'Token no proporcionado.' });
+    return res.status(401).json({ detail: 'No autenticado.' });
   }
   try {
     const payload = jwt.verify(auth.slice(7), SECRET_KEY);

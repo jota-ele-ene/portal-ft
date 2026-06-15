@@ -344,6 +344,9 @@ app.put('/suppliers/admin/:id', authenticate, async (req, res) => {
   Object.assign(s, updates);
 
   if (hasMinimum(s) && s.status === 'pendiente') s.status = 'revision';
+
+  updateUserStatus(db, s.email, 'active')  
+  
   saveDB(db);
 
   sendResponsibleEmail(s).catch(e => console.error('[gestion] sendResponsibleEmail error:', e.message));

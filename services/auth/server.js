@@ -2,10 +2,12 @@
  * Microservicio Auth
  *
  * POST /auth/otp/request  → genera y envía OTP por email
- * POST /auth/otp/verify   → valida OTP y devuelve JWT + redirect_to
- * GET  /auth/me           → info del token
- * POST /auth/invite       → invita a un proveedor
- * POST /auth/logout       → revoca el token
+ * POST /auth/otp/verify   → valida OTP, crea sesión y devuelve redirect_to
+ * GET  /auth/me           → info de la sesión
+ * GET  /auth/role-pages   → mapa de páginas por rol (admin)
+ * PUT  /auth/role-pages   → actualiza mapa de páginas por rol (admin)
+ * POST /auth/invite       → invita a un proveedor (admin)
+ * POST /auth/logout       → cierra la sesión
  * GET  /health            → health check
  */
 
@@ -13,35 +15,42 @@
 
 require('dotenv').config();
 
-const express    = require('express');
-const cors       = require('cors');
-const jwt        = require('jsonwebtoken');
+const express = require('express');
+const cors = require('cors');
+const session = require('express-session');
 const nodemailer = require('nodemailer');
-const fs         = require('fs');
-const path       = require('path');
-const crypto     = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 8001;
 
 // ── Config ─────────────────────────────────────────────────────────────────────
-const SECRET_KEY   = process.env.JWT_SECRET           || 'cambia-este-secreto-en-produccion';
-const TOKEN_EXP    = parseInt(process.env.TOKEN_EXPIRE_MINUTES || '120');
-const OTP_TTL      = parseInt(process.env.OTP_TTL_SECONDS       || '300');
-const SMTP_HOST    = process.env.SMTP_HOST  || 'localhost';
-const SMTP_PORT    = parseInt(process.env.SMTP_PORT || '587');
-const SMTP_USER    = process.env.SMTP_USER  || '';
-const SMTP_PASS    = process.env.SMTP_PASS  || '';
-const SMTP_FROM    = process.env.SMTP_FROM  || 'portal@tuempresa.com';
-const PORTAL_URL   = process.env.PORTAL_URL || `http://localhost:${PORT}`;
+const OTP_TTL = parseInt(process.env.OTP_TTL_SECONDS || '300', 10);
+const SMTP_HOST = process.env.SMTP_HOST || 'localhost';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_FROM = process.env.SMTP_FROM || 'portal@tuempresa.com';
+const PORTAL_URL = process.env.PORTAL_URL || `http://localhost:${PORT}`;
 
-const ADMIN_EMAIL  = (process.env.ADMIN_EMAIL || 'admin@tuempresa.com').trim().toLowerCase();
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@tuempresa.com').trim().toLowerCase();
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || ADMIN_EMAIL)
+  .split(',')
+  .map(v => v.trim().toLowerCase())
+  .filter(Boolean);
 
+const SESSION_SECRET = process.env.SESSION_SECRET || 'cambia-este-secreto-de-sesion-en-produccion';
+const SESSION_NAME = process.env.SESSION_NAME || 'portal.sid';
+const SESSION_TTL_MS = parseInt(process.env.SESSION_TTL_MS || String(8 * 60 * 60 * 1000), 10);
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const IS_PROD = NODE_ENV === 'production';
 
-const DATA_PATH    = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
-const DB_PATH      = process.env.AUTH_DB_PATH || path.join(DATA_PATH, 'auth.json');
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || process.env.PORTAL_FRONTEND_URL || '';
+const DATA_PATH = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
+const DB_PATH = process.env.AUTH_DB_PATH || path.join(DATA_PATH, 'auth.json');
 const SUPPLIERS_DB_PATH = process.env.GESTION_DB_PATH || path.join(DATA_PATH, 'suppliers.json');
-
 const ROLES_ROUTES_PATH = path.join(DATA_PATH, 'roles_routes.json');
 
 // ── Mapa de páginas permitidas por rol ────────────────────────────────────────
@@ -51,16 +60,36 @@ const DEFAULT_ROLE_PAGES = {
   supplier: ['/perfil']
 };
 
+// ── App settings ───────────────────────────────────────────────────────────────
+app.set('trust proxy', 1);
+
 // ── Middlewares globales ──────────────────────────────────────────────────────
-app.use(cors());
+app.use(cors({
+  origin: FRONTEND_ORIGIN || true,
+  credentials: true
+}));
+
 app.use(express.json());
+
+app.use(session({
+  name: SESSION_NAME,
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  rolling: true,
+  cookie: {
+    httpOnly: true,
+    secure: IS_PROD,
+    sameSite: IS_PROD ? 'lax' : 'lax',
+    maxAge: SESSION_TTL_MS
+  }
+}));
 
 // ── TinyDB-style JSON store ───────────────────────────────────────────────────
 function sanitizeAuthDB(db) {
   db = db || {};
-  if (!Array.isArray(db.otp_codes))      db.otp_codes      = [];
-  if (!Array.isArray(db.users))          db.users          = [];
-  if (!Array.isArray(db.revoked_tokens)) db.revoked_tokens = [];
+  if (!Array.isArray(db.otp_codes)) db.otp_codes = [];
+  if (!Array.isArray(db.users)) db.users = [];
   if (!db.role_pages || typeof db.role_pages !== 'object') {
     db.role_pages = DEFAULT_ROLE_PAGES;
   }
@@ -85,6 +114,7 @@ function loadDB() {
 }
 
 function saveDB(data) {
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   fs.writeFileSync(DB_PATH, JSON.stringify(sanitizeAuthDB(data), null, 2), 'utf8');
 }
 
@@ -120,40 +150,15 @@ function loadRoleRoutes() {
   }
 }
 
-function isTokenRevoked(jti, db) {
-  if (!jti) return false;
-  const data = db || loadDB();
-  return Array.isArray(data.revoked_tokens) && data.revoked_tokens.some(item => item.jti === jti);
-}
-
-function revokeToken(token) {
-  const decoded = jwt.decode(token);
-  if (!decoded || !decoded.jti) return false;
-
-  const db = loadDB();
-  const now = Math.floor(Date.now() / 1000);
-  db.revoked_tokens = db.revoked_tokens.filter(item => item.expires_at > now);
-
-  if (!db.revoked_tokens.some(item => item.jti === decoded.jti)) {
-    db.revoked_tokens.push({
-      jti:        decoded.jti,
-      revoked_at: now,
-      expires_at: decoded.exp || now + TOKEN_EXP * 60
-    });
-    saveDB(db);
-  }
-  return true;
-}
-
 // ── Helpers de rol y redirección ──────────────────────────────────────────────
-function getAllowedPages(db, role) {
+function getAllowedPages(role) {
   const rolesRoutes = loadRoleRoutes();
   const pages = rolesRoutes[String(role || '').trim()] || DEFAULT_ROLE_PAGES[role] || ['/'];
   return Array.isArray(pages) ? pages : ['/'];
 }
 
-function getDefaultRedirect(db, role) {
-  const pages = getAllowedPages(db, role);
+function getDefaultRedirect(role) {
+  const pages = getAllowedPages(role);
   return pages[0] || '/';
 }
 
@@ -161,17 +166,17 @@ function getDefaultRedirect(db, role) {
 function getTransporter() {
   if (!SMTP_USER) return null;
   return nodemailer.createTransport({
-    host:   SMTP_HOST,
-    port:   SMTP_PORT,
+    host: SMTP_HOST,
+    port: SMTP_PORT,
     secure: SMTP_PORT === 465,
-    auth:   { user: SMTP_USER, pass: SMTP_PASS }
+    auth: { user: SMTP_USER, pass: SMTP_PASS }
   });
 }
 
 function buildOtpEmailText(otp) {
   return `Portal de Proveedores\n\n` +
          `Tu código de acceso es: ${otp}\n\n` +
-         `Válido durante ${Math.floor(OTP_TTL/60)} minutos.\n` +
+         `Válido durante ${Math.floor(OTP_TTL / 60)} minutos.\n` +
          `Si no solicitaste este código, ignóralo.\n\n` +
          `Si necesitas ayuda, contacta a ${ADMIN_EMAIL}.`;
 }
@@ -183,7 +188,7 @@ function buildOtpEmailHtml(otp) {
       <p>Tu código de acceso es:</p>
       <div style="font-size:2.5rem;font-weight:700;letter-spacing:.3em;background:#f0f4ff;padding:1rem;border-radius:8px;text-align:center;color:#1a56db">${otp}</div>
       <p style="color:#6b7280;font-size:.95rem;margin-top:1rem;line-height:1.5">
-        Válido durante ${Math.floor(OTP_TTL/60)} minutos.<br>
+        Válido durante ${Math.floor(OTP_TTL / 60)} minutos.<br>
         Si no solicitaste este código, ignora este mensaje.
       </p>
       <p style="color:#6b7280;font-size:.85rem;line-height:1.5;margin-top:1.5rem">
@@ -220,7 +225,8 @@ async function sendOtpEmail(to, otp) {
   console.log(`[DEV] OTP para ${to}: ${otp}`);
   if (!transporter) return;
   await transporter.sendMail({
-    from: SMTP_FROM, to,
+    from: SMTP_FROM,
+    to,
     subject: `Tu código de acceso: ${otp}`,
     text: buildOtpEmailText(otp),
     html: buildOtpEmailHtml(otp)
@@ -232,7 +238,8 @@ async function sendInviteEmail(to) {
   console.log(`[DEV] Invitación para ${to}: ${PORTAL_URL}`);
   if (!transporter) return;
   await transporter.sendMail({
-    from: SMTP_FROM, to,
+    from: SMTP_FROM,
+    to,
     subject: 'Invitación al Portal de Proveedores',
     text: buildInviteEmailText(to),
     html: buildInviteEmailHtml(to)
@@ -242,14 +249,6 @@ async function sendInviteEmail(to) {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function generateOtp() {
   return String(crypto.randomInt(100000, 999999));
-}
-
-function createJWT(email, role) {
-  return jwt.sign(
-    { sub: email, role, iat: Math.floor(Date.now() / 1000), jti: crypto.randomUUID() },
-    SECRET_KEY,
-    { expiresIn: TOKEN_EXP * 60 }
-  );
 }
 
 function isAuthorizedEmail(db, email) {
@@ -262,9 +261,10 @@ function getOrCreateUser(db, email) {
   let user = db.users.find(u => u.email === email);
   if (!user) {
     user = {
-      id:         crypto.randomUUID(),
+      id: crypto.randomUUID(),
       email,
-      role:       ADMIN_EMAILS.includes(email) || email === ADMIN_EMAIL ? 'admin' : 'supplier',
+      status: 'new',
+      role: ADMIN_EMAILS.includes(email) ? 'admin' : 'supplier',
       created_at: new Date().toISOString()
     };
     db.users.push(user);
@@ -272,18 +272,25 @@ function getOrCreateUser(db, email) {
   return user;
 }
 
+function updateUserStatus(db, email, status) {
+  const user = db.users.find(u => u.email === email);
+  if (user) {
+    user.status = status;
+  }
+  user.updated_at = new Date().toISOString();
+
+  saveDB(db);
+  res.json({ message: 'Usuario actualizado correctamente.', user });
+}
+
+// ── Middlewares de autenticación y autorización ─────────────────────────────
+
 function authenticate(req, res, next) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) {
-    return res.status(401).json({ detail: 'Token no proporcionado.' });
+  if (!req.session?.user) {
+    return res.status(401).json({ detail: 'No autenticado.' });
   }
-  try {
-    const payload = jwt.verify(auth.slice(7), SECRET_KEY);
-    req.user = payload;
-    next();
-  } catch (e) {
-    return res.status(401).json({ detail: 'Token inválido o expirado.' });
-  }
+  req.user = req.session.user;
+  next();
 }
 
 function requireAdmin(req, res, next) {
@@ -293,44 +300,32 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function requireAdminUser(req, res, next) {
+  if ( (req.user?.role !== 'admin') && (req.user?.role !== 'user') ) {
+    return res.status(403).json({ detail: 'Operación restringido a usuarios autorizados.' });
+  }
+  next();
+}
+
 // ── Rutas ──────────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) =>
   res.json({ status: 'ok', service: 'auth' })
 );
 
-app.get('/auth/me', (req, res) => {
-  if (req.session?.user) {
-    return res.json({
-      email: req.session.user.email,
-      role: req.session.user.role
-    });
-  }
-
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) {
-    return res.status(401).json({ detail: 'No autenticado.' });
-  }
-
-  try {
-    const payload = jwt.verify(auth.slice(7), SECRET_KEY);
-    return res.json({
-      email: payload.sub,
-      role: payload.role,
-      iat: payload.iat,
-      exp: payload.exp
-    });
-  } catch (e) {
-    return res.status(401).json({ detail: 'Token inválido o expirado.' });
-  }
+app.get('/auth/me', authenticate, (req, res) => {
+  return res.json({
+    id: req.user.id,
+    email: req.user.email,
+    role: req.user.role
+  });
 });
 
-// Devuelve el mapa de páginas por rol (solo admin)
 app.get('/auth/role-pages', authenticate, requireAdmin, (req, res) => {
   const db = loadDB();
-  res.json({ role_pages: db.role_pages });
+  const rolePages = db.role_pages || loadRoleRoutes();
+  res.json({ role_pages: rolePages });
 });
 
-// Actualiza el mapa de páginas por rol (solo admin)
 app.put('/auth/role-pages', authenticate, requireAdmin, (req, res) => {
   const { role_pages } = req.body;
   if (!role_pages || typeof role_pages !== 'object') {
@@ -350,6 +345,7 @@ app.post('/auth/otp/request', async (req, res) => {
 
   const emailLower = email.toLowerCase().trim();
   const db = loadDB();
+
   if (!isAuthorizedEmail(db, emailLower)) {
     return res.status(403).json({
       detail: `No eres un usuario autorizado. Si crees que necesitas acceso, contacta a ${ADMIN_EMAIL}.`
@@ -361,11 +357,11 @@ app.post('/auth/otp/request', async (req, res) => {
 
   db.otp_codes = db.otp_codes.filter(o => o.email !== emailLower);
   db.otp_codes.push({
-    email:      emailLower,
+    email: emailLower,
     otp,
     created_at: now,
     expires_at: now + OTP_TTL,
-    used:       false
+    used: false
   });
   saveDB(db);
 
@@ -385,17 +381,18 @@ app.post('/auth/otp/verify', (req, res) => {
   }
 
   const emailLower = email.toLowerCase().trim();
-  const now        = Math.floor(Date.now() / 1000);
-
-  const db     = loadDB();
+  const now = Math.floor(Date.now() / 1000);
+  const db = loadDB();
   const record = db.otp_codes.find(o => o.email === emailLower && !o.used);
 
   if (!record) {
     return res.status(400).json({ detail: 'No hay un código activo para este correo.' });
   }
+
   if (record.otp !== String(otp).trim()) {
     return res.status(400).json({ detail: 'Código incorrecto.' });
   }
+
   if (now > record.expires_at) {
     db.otp_codes = db.otp_codes.filter(o => o.email !== emailLower);
     saveDB(db);
@@ -403,85 +400,82 @@ app.post('/auth/otp/verify', (req, res) => {
   }
 
   record.used = true;
-  const user  = getOrCreateUser(db, emailLower);
+  const user = getOrCreateUser(db, emailLower);
   saveDB(db);
 
-  const redirectTo   = getDefaultRedirect(db, user.role);
-  const allowedPages = getAllowedPages(db, user.role);
+  const redirectTo = getDefaultRedirect(user.role);
+  const allowedPages = getAllowedPages(user.role);
 
-  if (req.session) {
-    req.session.user = {
-      id: user.id,
-      email: user.email,
-      role: user.role
-    };
+  req.session.user = {
+    id: user.id,
+    email: user.email,
+    status: user.status,
+    role: user.role
+  };
 
-    return req.session.save(err => {
-      if (err) {
-        console.error('[session.save]', err);
-        return res.status(500).json({ detail: 'No se pudo iniciar la sesión.' });
-      }
+  return req.session.save(err => {
+    if (err) {
+      console.error('[session.save]', err);
+      return res.status(500).json({ detail: 'No se pudo iniciar la sesión.' });
+    }
 
-      return res.json({
-        ok: true,
-        role: user.role,
-        redirect_to: redirectTo,
-        allowed_pages: allowedPages
-      });
+    return res.json({
+      ok: true,
+      role: user.role,
+      redirect_to: redirectTo,
+      allowed_pages: allowedPages
     });
-  }
-
-  res.json({
-    ok: true,
-    role: user.role,
-    redirect_to: redirectTo,
-    allowed_pages: allowedPages
   });
-
 });
 
-app.post('/auth/invite', authenticate, requireAdmin, async (req, res) => {
+app.post('/auth/invite', authenticate, requireAdminUser, async (req, res) => {
   const { name, email } = req.body;
+
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(422).json({ detail: 'Email no válido.' });
   }
 
-  const emailLower        = email.toLowerCase().trim();
-  // El admin que invita es req.user.sub
-  const responsibleEmail  = (req.user.sub || '').toLowerCase().trim();
+  const emailLower = email.toLowerCase().trim();
+  const responsibleEmail = (req.user.email || '').toLowerCase().trim();
   const db = loadDB();
+
   if (db.users.some(u => u.email === emailLower)) {
     return res.status(409).json({ detail: 'Ese correo ya está registrado.' });
   }
 
   const user = {
-    id:         crypto.randomUUID(),
-    email:      emailLower,
-    role:       'supplier',
+    id: crypto.randomUUID(),
+    email: emailLower,
+    role: 'supplier',
+    status: 'invited',
     created_at: new Date().toISOString()
   };
+
   db.users.push(user);
   saveDB(db);
 
-  // ── Crear/actualizar entrada en suppliers.json con responsible_email ────────
   try {
     const sdb = loadSuppliersDB();
-    let supplier = sdb.suppliers.find(s => s.email === emailLower);
+    let supplier = sdb.suppliers.find(s => s.email_contacto === emailLower || s.email === emailLower);
+
     if (!supplier) {
       supplier = {
-        id:                crypto.randomUUID(),
-        alias:      name ? name.trim() : '',
-        email_contacto:             emailLower,
-        status:            'pendiente',
+        id: crypto.randomUUID(),
+        alias: name ? name.trim() : '',
+        email_contacto: emailLower,
+        status: 'pendiente',
         responsible_email: responsibleEmail,
-        created_at:        new Date().toISOString(),
-        updated_at:        new Date().toISOString()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
       sdb.suppliers.push(supplier);
     } else {
+      supplier.alias = name ? name.trim() : supplier.alias || '';
+      supplier.email_contacto = emailLower;
       supplier.responsible_email = responsibleEmail;
-      supplier.updated_at        = new Date().toISOString();
+      supplier.updated_at = new Date().toISOString();
     }
+
     saveSuppliersDB(sdb);
   } catch (e) {
     console.error('[invite] Error actualizando suppliers.json:', e.message);
@@ -496,17 +490,56 @@ app.post('/auth/invite', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-app.post('/auth/logout', (req, res) => {
-  if (req.session) {
-    return req.session.destroy(err => {
-      if (err) {
-        return res.status(500).json({ detail: 'No se pudo cerrar la sesión.' });
-      }
-      return res.json({ message: 'Sesión cerrada correctamente.' });
-    });
+// PUT /auth/users/:id  —  actualizar rol y/o estado de un usuario (solo admin)
+app.put('/auth/users/:id', authenticate, requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { role, status } = req.body;
+
+  const VALID_ROLES   = ['admin', 'user', 'supplier'];
+  const VALID_STATUSES = ['new', 'invited', 'active', 'disabled'];
+
+  if (role && !VALID_ROLES.includes(role)) {
+    return res.status(422).json({ detail: `Rol no válido. Valores permitidos: ${VALID_ROLES.join(', ')}.` });
+  }
+  if (status && !VALID_STATUSES.includes(status)) {
+    return res.status(422).json({ detail: `Estado no válido. Valores permitidos: ${VALID_STATUSES.join(', ')}.` });
   }
 
-  return res.json({ message: 'Sesión cerrada correctamente.' });
+  const db = loadDB();
+  const user = db.users.find(u => u.id === id);
+
+  if (!user) {
+    return res.status(404).json({ detail: 'Usuario no encontrado.' });
+  }
+
+  if (role)   user.role   = role;
+  if (status) user.status = status;
+  user.updated_at = new Date().toISOString();
+
+  saveDB(db);
+  res.json({ message: 'Usuario actualizado correctamente.', user });
+});
+
+// GET /auth/users  —  listar usuarios (solo admin)
+app.get('/auth/users', authenticate, requireAdmin, (req, res) => {
+  const db = loadDB();
+  res.json({ users: db.users });
+});
+
+app.post('/auth/logout', authenticate, (req, res) => {
+  req.session.destroy(err => {
+    if (err) {
+      return res.status(500).json({ detail: 'No se pudo cerrar la sesión.' });
+    }
+
+    res.clearCookie(SESSION_NAME, {
+      httpOnly: true,
+      secure: IS_PROD,
+      sameSite: IS_PROD ? 'lax' : 'lax'
+    });
+
+    return res.json({ message: 'Sesión cerrada correctamente.' });
+  });
 });
 
 // ── Start / Export ─────────────────────────────────────────────────────────────
@@ -515,8 +548,7 @@ if (require.main === module) {
     console.log(`[auth] Puerto ${PORT}`)
   );
 } else {
-
-    module.exports = app;
-    module.exports.authenticate = authenticate;
-
+  module.exports = app;
+  module.exports.authenticate = authenticate;
+  module.exports.requireAdmin = requireAdmin;
 }

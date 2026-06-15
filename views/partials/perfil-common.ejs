@@ -5,13 +5,14 @@
   const isAdmin = !!(safeUser && safeUser.role === 'admin');
   const _sid = typeof supplierId !== 'undefined' && supplierId ? supplierId : null;
   const isEdit = mode === 'edit';
-  const headerTitle = isEdit ? 'Editar perfil de proveedor' : 'Mi perfil de proveedor';
+  const headerTitle = isEdit ? 'Editar perfil de proveedor' : 'Perfil de proveedor';
   const headerDescription = isEdit
     ? 'Completa la información en cada pestaña y guarda el borrador o envía para revisión.'
     : 'Esta es la información de que disponemos en tu ficha de proveedor. <br>Revísala y edítala cuando necesites actualizarla.';
   
   console.log(JSON.stringify(typeof user !== 'undefined' ? user : locals.user, null, 2));
   console.log('Rendering perfil with mode:', mode, 'supplierId:', supplierId);
+
 %>
 
 <section class="step active" id="step-form">

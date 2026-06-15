@@ -29,7 +29,7 @@ function requireAuth(req, res, next) {
   if (!auth.startsWith('Bearer ')) {
     const acceptsHtml = req.accepts(['html', 'json']) === 'html';
     if (acceptsHtml) return res.redirect('/');
-    return res.status(401).json({ detail: 'Token no proporcionado.' });
+    return res.status(401).json({ detail: 'requireAuth(): Token no proporcionado.' });
   }
 
   const token = auth.slice(7);
