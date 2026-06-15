@@ -6,7 +6,8 @@ window.API = window.__API_BASE__ || '';
 
 // SUPPLIER_ID se inyecta desde la vista EJS cuando el admin edita un proveedor concreto
 const supplierId = window.SUPPLIER_ID || null;
-console.log('Initializing supplier form with supplierId:', supplierId);
+const isNewSupplier = window.IS_NEW_SUPPLIER === true;
+console.log('Initializing supplier form with supplierId:', supplierId, 'isNewSupplier:', isNewSupplier);
 
 
 const currentProfile = { documents: [] };
@@ -194,6 +195,13 @@ function cancelUrl() {
 
 
 async function loadSupplierData() {
+  if (isNewSupplier && !supplierId) {
+    currentProfile.documents = [];
+    renderUploadedDocs(currentProfile.documents);
+    updateStatusBadges({});
+    return;
+  }
+
   try {
     const res = await fetch(profileUrl(), { credentials: 'include' });
     if (!res.ok) return;
