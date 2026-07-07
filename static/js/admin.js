@@ -3,10 +3,10 @@ window.API = window.API || (window.__API_BASE__ || window.APP_BASE).replace(/\/$
 
 let allSuppliers = [];
 let filteredSuppliers = [];
-const PAGE_SIZE = 5;
-let currentPage = 1;
 let adminEmailLocal = '';
 let pendingRejectedStatusId = '';
+let currentPage = 1;
+const rowsPerPage = 5;
 
 console.log('Admin dashboard JS cargado en', window.location.pathname);
 
@@ -157,8 +157,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       await loadSuppliers();
     }
   } catch (e) {
-      console.error('Fallo cargando sesión en /proveedores:', e);
-      showToast('No se pudo validar la sesión.', 'error');
+    console.error('Fallo cargando sesión en /proveedores:', e);
+    showToast('No se pudo validar la sesión.', 'error');
     return;
   }
 
@@ -193,9 +193,13 @@ async function loadSuppliers() {
     }
 
     allSuppliers = data.suppliers || [];
-    filteredSuppliers = allSuppliers;
-    currentPage = 1;
-    renderPage();
+
+    const countEl = document.getElementById('supplierCount');
+    if (countEl) {
+      countEl.textContent = `${allSuppliers.length} proveedor(es) registrado(s)`;
+    }
+
+    filterTable();
   } catch (e) {
     showToast(e.message || 'Error al cargar proveedores.', 'error');
   }
@@ -205,27 +209,38 @@ function filterTable() {
   const qEl = document.getElementById('searchInput');
   const rEl = document.getElementById('responsableFilter');
   const stEl = document.getElementById('statusFilter');
-  if (!qEl || !stEl) return;
+
+  if (!qEl || !stEl) {
+    return;
+  }
 
   const q = qEl.value.toLowerCase();
   const r = rEl ? rEl.value.toLowerCase() : '';
   const st = stEl.value;
 
-  filteredSuppliers = allSuppliers.filter(s => {
-    const matchQ =
-      !q ||
-      (s.alias || '').toLowerCase().includes(q) ||
-      (s.nif || '').toLowerCase().includes(q) ||
-      (s.email || '').toLowerCase().includes(q) ||
-      (s.responsible_email || '').toLowerCase().includes(q);
+  filteredSuppliers = allSuppliers
+    .filter(s => {
+      const matchQ =
+        !q ||
+        (s.alias || '').toLowerCase().includes(q) ||
+        (s.razon_social || '').toLowerCase().includes(q) ||
+        (s.nombre_comercial || '').toLowerCase().includes(q) ||
+        (s.nif || '').toLowerCase().includes(q) ||
+        (s.email || '').toLowerCase().includes(q) ||
+        (s.responsible_email || '').toLowerCase().includes(q);
 
-    const matchR =
-      !r ||
-      (s.responsible_email || '').toLowerCase().includes(r) ||
-      (s.responsible_name || '').toLowerCase().includes(r);
+      const matchR =
+        !r ||
+        (s.responsible_email || '').toLowerCase().includes(r) ||
+        (s.responsible_name || '').toLowerCase().includes(r);
 
-    return matchQ && matchR && (!st || s.status === st);
-  });
+      return matchQ && matchR && (!st || s.status === st);
+    })
+    .sort((a, b) => {
+      const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      return dateB - dateA;
+    });
 
   currentPage = 1;
   renderPage();
@@ -241,79 +256,73 @@ const STATUS_LABELS = {
 const STATUS_NEXT = ['pendiente', 'revision', 'aprobado', 'rechazado'];
 
 function renderPage() {
-  const total = filteredSuppliers.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  if (currentPage > totalPages) currentPage = totalPages;
+  const tbody = document.getElementById('suppliersBody');
+  const paginationControls = document.getElementById('paginationControls');
+  if (!tbody) return;
 
-  const start = (currentPage - 1) * PAGE_SIZE;
-  const pageSuppliers = filteredSuppliers.slice(start, start + PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filteredSuppliers.length / rowsPerPage));
+  currentPage = Math.min(Math.max(1, currentPage), totalPages);
 
-  renderTable(pageSuppliers);
+  const start = (currentPage - 1) * rowsPerPage;
+  const end = start + rowsPerPage;
+  const pageData = filteredSuppliers.slice(start, end);
 
-  // Update count
-  const countEl = document.getElementById('supplierCount');
-  if (countEl) {
-    countEl.textContent = `${total} proveedor(es) registrado(s)`;
-  }
+  renderTable(pageData);
 
-  // Render pagination controls
-  const paginationEl = document.getElementById('paginationControls');
-  if (!paginationEl) return;
+  if (!paginationControls) return;
 
-  if (totalPages <= 1) {
-    paginationEl.innerHTML = '';
+  if (filteredSuppliers.length === 0 || totalPages <= 1) {
+    paginationControls.innerHTML = '';
     return;
   }
 
-  let html = `<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:1rem;">`;
-  html += `<button class="btn btn-secondary btn-sm" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>&larr; Anterior</button>`;
+  let html = '<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:1rem;">';
+  html += `<button class="btn btn-secondary btn-sm" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>← Anterior</button>`;
+
   for (let p = 1; p <= totalPages; p++) {
-    const active = p === currentPage ? 'style="font-weight:700;text-decoration:underline;"' : '';
-    html += `<button class="btn btn-secondary btn-sm" onclick="goToPage(${p})" ${active}>${p}</button>`;
+    html += `<button class="btn btn-secondary btn-sm" onclick="goToPage(${p})" ${p === currentPage ? 'style="font-weight:700;text-decoration:underline;"' : ''}>${p}</button>`;
   }
-  html += `<button class="btn btn-secondary btn-sm" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>Siguiente &rarr;</button>`;
-  html += `<span style="font-size:.82rem;color:var(--text-muted);margin-left:.5rem">Página ${currentPage} de ${totalPages} &nbsp;&middot;&nbsp; ${total} resultado(s)</span>`;
-  html += `</div>`;
-  paginationEl.innerHTML = html;
+
+  html += `<button class="btn btn-secondary btn-sm" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>Siguiente →</button>`;
+  html += `<span style="font-size:.82rem;color:var(--text-muted);margin-left:.5rem">Página ${currentPage} de ${totalPages} · ${filteredSuppliers.length} resultado(s)</span>`;
+  html += '</div>';
+  paginationControls.innerHTML = html;
 }
 
 function goToPage(page) {
-  const total = filteredSuppliers.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  currentPage = Math.max(1, Math.min(page, totalPages));
+  const totalPages = Math.max(1, Math.ceil(filteredSuppliers.length / rowsPerPage));
+  currentPage = Math.min(Math.max(1, page), totalPages);
   renderPage();
 }
 
-function renderTable(suppliers) {
+function renderTable(suppliersToRender) {
   const tbody = document.getElementById('suppliersBody');
   if (!tbody) return;
 
-  if (!suppliers.length) {
+  if (!suppliersToRender.length) {
     tbody.innerHTML =
-      '<tr><td colspan="5" style="text-align:center;padding:2.5rem;color:var(--text-faint)">Sin resultados.</td></tr>';
+      '<tr><td colspan="4" style="text-align:center;padding:2.5rem;color:var(--text-faint)">Sin resultados.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = suppliers
+  tbody.innerHTML = suppliersToRender
     .map(s => {
       const nombre = s.alias || s.razon_social || s.nombre_comercial || s.email || '—';
-      const responsable = s.responsible_email || '—';
+      const responsable = s.responsible_email || s.responsible_name || '—';
       const status = s.status || 'pendiente';
       const fecha = s.updated_at ? new Date(s.updated_at).toLocaleDateString('es-ES') : '—';
 
       const statusOptions = STATUS_NEXT
         .filter(st => st !== status)
-        .map(
-          st => `
-            <button
-              class="status-option"
-              onclick="handleStatusAction('${s.id}','${st}', this)"
-              style="display:block;width:100%;text-align:left;padding:.4rem .75rem;border:none;background:none;cursor:pointer;font-size:.82rem;color:var(--text)"
-            >
-              ${STATUS_LABELS[st]}
-            </button>
-          `
-        )
+        .map(st => `
+          <button
+            class="status-option"
+            onclick="handleStatusAction('${s.id}','${st}', this)"
+            style="display:block;width:100%;text-align:left;padding:.4rem .75rem;border:none;background:none;cursor:pointer;font-size:.82rem;color:var(--text)"
+          >
+            ${STATUS_LABELS[st]}
+          </button>
+        `)
         .join('');
 
       return `
@@ -379,9 +388,13 @@ function openRejectStatusModal(id) {
   const modal = document.getElementById('rejectStatusModal');
   const input = document.getElementById('rejectObservations');
   const error = document.getElementById('rejectObservationsError');
+  const hidden = document.getElementById('rejectSupplierId');
+  if (hidden) hidden.value = id;
   if (input) input.value = '';
-  if (error) error.style.display = 'none';
-  document.getElementById('rejectSupplierId').value = id;
+  if (error) {
+    error.textContent = '';
+    error.style.display = 'none';
+  }
   if (modal) modal.style.display = 'flex';
 }
 
