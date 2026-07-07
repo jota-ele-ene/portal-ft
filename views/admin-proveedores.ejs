@@ -14,6 +14,7 @@
       </div>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
         <input class="form-control" type="search" id="searchInput" placeholder="Buscar…" aria-label="Buscar proveedor" style="width:200px" oninput="filterTable()">
+        <input class="form-control" type="search" id="responsableFilter" placeholder="Filtrar responsable…" aria-label="Filtrar por responsable" style="width:200px" oninput="filterTable()">
         <select class="form-control" id="statusFilter" aria-label="Filtrar por estado" style="width:150px" onchange="filterTable()">
           <option value="">Todos los estados</option>
           <option value="pendiente">Pendiente</option>
@@ -41,6 +42,7 @@
         </tbody>
       </table>
     </div>
+    <div id="paginationControls"></div>
   </section>
 
   <div id="inviteModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.65);backdrop-filter:blur(2px);align-items:center;justify-content:center;z-index:999;padding:1rem;">
