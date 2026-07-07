@@ -2,6 +2,9 @@ window.APP_BASE = window.APP_BASE || window.location.pathname.replace(/\/[^/]*$/
 window.API = window.API || (window.__API_BASE__ || window.APP_BASE).replace(/\/$/, '');
 
 let allSuppliers = [];
+let filteredSuppliers = [];
+const PAGE_SIZE = 5;
+let currentPage = 1;
 let adminEmailLocal = '';
 let pendingRejectedStatusId = '';
 
@@ -190,13 +193,9 @@ async function loadSuppliers() {
     }
 
     allSuppliers = data.suppliers || [];
-
-    const countEl = document.getElementById('supplierCount');
-    if (countEl) {
-      countEl.textContent = `${allSuppliers.length} proveedor(es) registrado(s)`;
-    }
-
-    renderTable(allSuppliers);
+    filteredSuppliers = allSuppliers;
+    currentPage = 1;
+    renderPage();
   } catch (e) {
     showToast(e.message || 'Error al cargar proveedores.', 'error');
   }
@@ -204,24 +203,32 @@ async function loadSuppliers() {
 
 function filterTable() {
   const qEl = document.getElementById('searchInput');
+  const rEl = document.getElementById('responsableFilter');
   const stEl = document.getElementById('statusFilter');
   if (!qEl || !stEl) return;
 
   const q = qEl.value.toLowerCase();
+  const r = rEl ? rEl.value.toLowerCase() : '';
   const st = stEl.value;
 
-  renderTable(
-    allSuppliers.filter(s => {
-      const matchQ =
-        !q ||
-        (s.alias || '').toLowerCase().includes(q) ||
-        (s.nif || '').toLowerCase().includes(q) ||
-        (s.email || '').toLowerCase().includes(q) ||
-        (s.responsible_email || '').toLowerCase().includes(q);
+  filteredSuppliers = allSuppliers.filter(s => {
+    const matchQ =
+      !q ||
+      (s.alias || '').toLowerCase().includes(q) ||
+      (s.nif || '').toLowerCase().includes(q) ||
+      (s.email || '').toLowerCase().includes(q) ||
+      (s.responsible_email || '').toLowerCase().includes(q);
 
-      return matchQ && (!st || s.status === st);
-    })
-  );
+    const matchR =
+      !r ||
+      (s.responsible_email || '').toLowerCase().includes(r) ||
+      (s.responsible_name || '').toLowerCase().includes(r);
+
+    return matchQ && matchR && (!st || s.status === st);
+  });
+
+  currentPage = 1;
+  renderPage();
 }
 
 const STATUS_LABELS = {
@@ -232,6 +239,50 @@ const STATUS_LABELS = {
 };
 
 const STATUS_NEXT = ['pendiente', 'revision', 'aprobado', 'rechazado'];
+
+function renderPage() {
+  const total = filteredSuppliers.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageSuppliers = filteredSuppliers.slice(start, start + PAGE_SIZE);
+
+  renderTable(pageSuppliers);
+
+  // Update count
+  const countEl = document.getElementById('supplierCount');
+  if (countEl) {
+    countEl.textContent = `${total} proveedor(es) registrado(s)`;
+  }
+
+  // Render pagination controls
+  const paginationEl = document.getElementById('paginationControls');
+  if (!paginationEl) return;
+
+  if (totalPages <= 1) {
+    paginationEl.innerHTML = '';
+    return;
+  }
+
+  let html = `<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:1rem;">`;
+  html += `<button class="btn btn-secondary btn-sm" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>&larr; Anterior</button>`;
+  for (let p = 1; p <= totalPages; p++) {
+    const active = p === currentPage ? 'style="font-weight:700;text-decoration:underline;"' : '';
+    html += `<button class="btn btn-secondary btn-sm" onclick="goToPage(${p})" ${active}>${p}</button>`;
+  }
+  html += `<button class="btn btn-secondary btn-sm" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>Siguiente &rarr;</button>`;
+  html += `<span style="font-size:.82rem;color:var(--text-muted);margin-left:.5rem">Página ${currentPage} de ${totalPages} &nbsp;&middot;&nbsp; ${total} resultado(s)</span>`;
+  html += `</div>`;
+  paginationEl.innerHTML = html;
+}
+
+function goToPage(page) {
+  const total = filteredSuppliers.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  currentPage = Math.max(1, Math.min(page, totalPages));
+  renderPage();
+}
 
 function renderTable(suppliers) {
   const tbody = document.getElementById('suppliersBody');
@@ -328,13 +379,9 @@ function openRejectStatusModal(id) {
   const modal = document.getElementById('rejectStatusModal');
   const input = document.getElementById('rejectObservations');
   const error = document.getElementById('rejectObservationsError');
-  const hidden = document.getElementById('rejectSupplierId');
-  if (hidden) hidden.value = id;
   if (input) input.value = '';
-  if (error) {
-    error.textContent = '';
-    error.style.display = 'none';
-  }
+  if (error) error.style.display = 'none';
+  document.getElementById('rejectSupplierId').value = id;
   if (modal) modal.style.display = 'flex';
 }
 
