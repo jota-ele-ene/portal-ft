@@ -26,7 +26,6 @@ const DATA_PATH    = process.env.DATA_PATH || path.join(__dirname, '..', '..', '
 const AUTH_DB_PATH = path.join(DATA_PATH, 'auth.json');
 const UPLOADS_DIR  = process.env.UPLOADS_DIR  || path.join(DATA_PATH, 'uploads');
 const STATIC_DIR   = process.env.STATIC_DIR   || path.join(__dirname, '..', '..', 'static');
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'admin@tuempresa.com').split(',').map(e => e.trim().toLowerCase());
 const MAX_SIZE_MB  = parseInt(process.env.MAX_FILE_SIZE_MB || '10');
 
 // Middlewares globales

@@ -68,7 +68,6 @@ nano .env
 |---|---|
 | `JWT_SECRET` | Clave secreta JWT (mín. 32 caracteres aleatorios) |
 | `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` | Credenciales SMTP |
-| `ADMIN_EMAILS` | Correos con acceso al panel de administración |
 
 > **Desarrollo sin SMTP:** deja `SMTP_USER` vacío. Los códigos OTP aparecerán en los logs del contenedor:
 > ```bash

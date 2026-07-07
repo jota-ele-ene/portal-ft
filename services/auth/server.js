@@ -35,19 +35,13 @@ const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || 'portal@tuempresa.com';
 const PORTAL_URL = process.env.PORTAL_URL || `http://localhost:${PORT}`;
 
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@tuempresa.com').trim().toLowerCase();
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || ADMIN_EMAIL)
-  .split(',')
-  .map(v => v.trim().toLowerCase())
-  .filter(Boolean);
-
-const SESSION_SECRET = process.env.SESSION_SECRET || 'cambia-este-secreto-de-sesion-en-produccion';
+const SESSION_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || crypto.randomBytes(21).toString('hex');
 const SESSION_NAME = process.env.SESSION_NAME || 'portal.sid';
 const SESSION_TTL_MS = parseInt(process.env.SESSION_TTL_MS || String(8 * 60 * 60 * 1000), 10);
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
 
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || process.env.PORTAL_FRONTEND_URL || '';
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || process.env.PORTAL_FRONTEND_URL || 'http://localhost';
 const DATA_PATH = process.env.DATA_PATH || path.join(__dirname, '..', '..', 'data');
 const DB_PATH = process.env.AUTH_DB_PATH || path.join(DATA_PATH, 'auth.json');
 const SUPPLIERS_DB_PATH = process.env.GESTION_DB_PATH || path.join(DATA_PATH, 'suppliers.json');
@@ -92,9 +86,6 @@ function sanitizeAuthDB(db) {
   db = db || {};
   if (!Array.isArray(db.otp_codes)) db.otp_codes = [];
   if (!Array.isArray(db.users)) db.users = [];
-  if (!db.role_pages || typeof db.role_pages !== 'object') {
-    db.role_pages = DEFAULT_ROLE_PAGES;
-  }
   return db;
 }
 
@@ -201,8 +192,7 @@ async function sendOtpEmail(to, otp) {
 
   const vars = {
     otp,
-    otp_ttl_minutes: Math.floor(OTP_TTL / 60),
-    admin_email: ADMIN_EMAIL
+    otp_ttl_minutes: Math.floor(OTP_TTL / 60)
   };
 
   await transporter.sendMail({
@@ -221,8 +211,7 @@ async function sendInviteEmail(to) {
 
   const vars = {
     email: to,
-    portal_url: PORTAL_URL,
-    admin_email: ADMIN_EMAIL
+    portal_url: PORTAL_URL
   };
 
   await transporter.sendMail({
@@ -245,19 +234,8 @@ function isAuthorizedEmail(db, email) {
   return db.users.some(u => u.email === emailLower);
 }
 
-function getOrCreateUser(db, email) {
-  let user = db.users.find(u => u.email === email);
-  if (!user) {
-    user = {
-      id: crypto.randomUUID(),
-      email,
-      status: 'new',
-      role: ADMIN_EMAILS.includes(email) ? 'admin' : 'supplier',
-      created_at: new Date().toISOString()
-    };
-    db.users.push(user);
-  }
-  return user;
+function getUser(db, email) {
+  return db.users.find(u => u.email === email);
 }
 
 /**
@@ -294,13 +272,6 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-function requireAdminUser(req, res, next) {
-  if ( (req.user?.role !== 'admin') && (req.user?.role !== 'user') ) {
-    return res.status(403).json({ detail: 'Operación restringido a usuarios autorizados.' });
-  }
-  next();
-}
-
 // ── Rutas ──────────────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) =>
   res.json({ status: 'ok', service: 'auth' })
@@ -315,8 +286,7 @@ app.get('/auth/me', authenticate, (req, res) => {
 });
 
 app.get('/auth/role-pages', authenticate, requireAdmin, (req, res) => {
-  const db = loadDB();
-  const rolePages = db.role_pages || loadRoleRoutes();
+  const rolePages = loadRoleRoutes();
   res.json({ role_pages: rolePages });
 });
 
@@ -325,10 +295,11 @@ app.put('/auth/role-pages', authenticate, requireAdmin, (req, res) => {
   if (!role_pages || typeof role_pages !== 'object') {
     return res.status(422).json({ detail: 'role_pages debe ser un objeto.' });
   }
-  const db = loadDB();
-  db.role_pages = role_pages;
-  saveDB(db);
-  res.json({ message: 'Mapa de páginas actualizado.', role_pages: db.role_pages });
+
+  fs.mkdirSync(path.dirname(ROLES_ROUTES_PATH), { recursive: true });
+  fs.writeFileSync(ROLES_ROUTES_PATH, JSON.stringify(role_pages, null, 2), 'utf8');
+
+  res.json({ message: 'Mapa de páginas actualizado.', role_pages });
 });
 
 app.post('/auth/otp/request', async (req, res) => {
@@ -342,7 +313,7 @@ app.post('/auth/otp/request', async (req, res) => {
 
   if (!isAuthorizedEmail(db, emailLower)) {
     return res.status(403).json({
-      detail: `No eres un usuario autorizado. Si crees que necesitas acceso, contacta a ${ADMIN_EMAIL}.`
+      detail: `No eres un usuario autorizado. Contacta con un administrador para obtener acceso.`
     });
   }
 
@@ -364,7 +335,7 @@ app.post('/auth/otp/request', async (req, res) => {
     res.json({ message: 'Código enviado. Revisa tu bandeja de entrada.', expires_in: OTP_TTL });
   } catch (e) {
     console.error('[SMTP]', e.message);
-    res.status(500).json({ detail: 'Error al enviar el email. Contacta con soporte.' });
+    res.status(500).json({ detail: 'Error al enviar el email.' });
   }
 });
 
@@ -394,7 +365,10 @@ app.post('/auth/otp/verify', (req, res) => {
   }
 
   record.used = true;
-  const user = getOrCreateUser(db, emailLower);
+  const user = getUser(db, emailLower);
+  if (!user) {
+    return res.status(404).json({ detail: 'Usuario no encontrado.' });
+  }
   saveDB(db);
 
   const redirectTo = getDefaultRedirect(user.role);
@@ -422,7 +396,7 @@ app.post('/auth/otp/verify', (req, res) => {
   });
 });
 
-app.post('/auth/invite', authenticate, requireAdminUser, async (req, res) => {
+app.post('/auth/invite', authenticate, requireAdmin, async (req, res) => {
   const { name, email } = req.body;
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -450,7 +424,7 @@ app.post('/auth/invite', authenticate, requireAdminUser, async (req, res) => {
 
   try {
     const sdb = loadSuppliersDB();
-    let supplier = sdb.suppliers.find(s => s.email_contacto === emailLower || s.email === emailLower);
+    let supplier = sdb.suppliers.find(s => s.email === emailLower);
 
     if (!supplier) {
       supplier = {
@@ -465,7 +439,6 @@ app.post('/auth/invite', authenticate, requireAdminUser, async (req, res) => {
       sdb.suppliers.push(supplier);
     } else {
       supplier.alias = name ? name.trim() : supplier.alias || '';
-      supplier.email = emailLower;
       supplier.responsible_email = responsibleEmail;
       supplier.updated_at = new Date().toISOString();
     }
