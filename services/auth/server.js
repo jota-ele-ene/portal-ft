@@ -6,7 +6,7 @@
  * GET  /auth/me           → info de la sesión
  * GET  /auth/role-pages   → mapa de páginas por rol (admin)
  * PUT  /auth/role-pages   → actualiza mapa de páginas por rol (admin)
- * POST /auth/invite       → invita a un proveedor (admin)
+ * POST /auth/invite       → invita a un proveedor (admin o user)
  * POST /auth/logout       → cierra la sesión
  * GET  /health            → health check
  */
@@ -272,6 +272,18 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+/**
+ * Permite el acceso a usuarios con rol 'admin' o 'user'.
+ * Usado en rutas que ambos roles comparten, como POST /auth/invite.
+ */
+function requireAdminOrUser(req, res, next) {
+  const role = req.user?.role;
+  if (role !== 'admin' && role !== 'user') {
+    return res.status(403).json({ detail: 'Acceso restringido a administradores y gestores.' });
+  }
+  next();
+}
+
 // ── Rutas ──────────────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) =>
   res.json({ status: 'ok', service: 'auth' })
@@ -396,7 +408,8 @@ app.post('/auth/otp/verify', (req, res) => {
   });
 });
 
-app.post('/auth/invite', authenticate, requireAdmin, async (req, res) => {
+// POST /auth/invite — invita a un proveedor (admin o user)
+app.post('/auth/invite', authenticate, requireAdminOrUser, async (req, res) => {
   const { name, email } = req.body;
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
