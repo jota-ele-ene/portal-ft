@@ -2,6 +2,9 @@ Hola,
 
 Se ha actualizado el perfil del proveedor {{razon_social}}.
 
+Datos del proveedor:
+{{all_data_rows_text}}
+
 Documentos actualizados:
 {{document_rows_text}}
 

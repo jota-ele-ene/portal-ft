@@ -81,6 +81,74 @@ function sanitizeEmail(email) {
   return (email || 'unknown').replace(/[^a-zA-Z0-9@._\-]/g, '_');
 }
 
+// ── Etiquetas legibles para los campos del proveedor ──────────────────────────
+const FIELD_LABELS = {
+  razon_social:           'Razón social',
+  nombre_comercial:       'Nombre comercial',
+  nif:                    'NIF / CIF',
+  actividad:              'Actividad',
+  tipo_via:               'Tipo de vía',
+  direccion:              'Dirección',
+  codigo_postal:          'Código postal',
+  provincia:              'Provincia',
+  ciudad:                 'Ciudad',
+  pais_residencia_fiscal: 'País de residencia fiscal',
+  persona_contacto:       'Persona de contacto',
+  email_contacto:         'Email de contacto',
+  email:                  'Email',
+  telefono:               'Teléfono',
+  iban:                   'IBAN',
+  swift:                  'SWIFT / BIC',
+  banco:                  'Banco',
+  sucursal:               'Sucursal',
+  codigo_entidad:         'Código entidad',
+  codigo_sucursal:        'Código sucursal',
+  moneda_pago:            'Moneda de pago',
+  alta_036:               'Alta modelo 036',
+  status:                 'Estado',
+  responsible_email:      'Email responsable',
+  created_at:             'Fecha de alta',
+  updated_at:             'Última actualización'
+};
+
+const PROFILE_FIELD_ORDER = [
+  'razon_social', 'nombre_comercial', 'nif', 'actividad',
+  'tipo_via', 'direccion', 'codigo_postal', 'provincia', 'ciudad', 'pais_residencia_fiscal',
+  'persona_contacto', 'email_contacto', 'email', 'telefono',
+  'iban', 'swift', 'banco', 'sucursal', 'codigo_entidad', 'codigo_sucursal', 'moneda_pago',
+  'alta_036', 'status', 'responsible_email', 'created_at', 'updated_at'
+];
+
+/**
+ * Construye las filas HTML y texto plano con todos los datos del proveedor.
+ * Omite campos internos (id, documents, etc.) y los que estén vacíos.
+ */
+function buildProfileRows(supplier) {
+  const rows_html = [];
+  const rows_text = [];
+
+  PROFILE_FIELD_ORDER.forEach(field => {
+    const raw = supplier[field];
+    if (raw === undefined || raw === null || raw === '') return;
+
+    const label = FIELD_LABELS[field] || field;
+    const display = typeof raw === 'boolean' ? (raw ? 'Sí' : 'No') : String(raw);
+
+    rows_html.push(
+      `<tr>` +
+      `<td style="padding:.5rem;border-bottom:1px solid #888;color:#666;width:40%;vertical-align:top">${label}</td>` +
+      `<td style="padding:.5rem;border-bottom:1px solid #888;vertical-align:top">${display}</td>` +
+      `</tr>`
+    );
+    rows_text.push(`${label}: ${display}`);
+  });
+
+  return {
+    all_data_rows_html: rows_html.join(''),
+    all_data_rows_text: rows_text.join('\n')
+  };
+}
+
 async function sendResponsibleEmail(supplier) {
   const gestEmail = process.env.GEST_EMAIL;
   const responsibleEmail = supplier.responsible_email || process.env.DEFAULT_RESPONSIBLE_EMAIL;
@@ -113,13 +181,13 @@ async function sendResponsibleEmail(supplier) {
         const original = doc.original || doc.filename || '';
         const uploaded = doc.uploaded_at || '';
         return `<tr>
-          <td style="padding:.5rem;border-bottom:1px solid #eee;color:#666;width:40%">Documento</td>
-          <td style="padding:.5rem;border-bottom:1px solid #eee">${label} <span style="color:#666">(${original}${uploaded ? `, ${uploaded}` : ''})</span></td>
+          <td style="padding:.5rem;border-bottom:1px solid #888;color:#666;width:40%">Documento</td>
+          <td style="padding:.5rem;border-bottom:1px solid #888">${label} <span style="color:#666">(${original}${uploaded ? `, ${uploaded}` : ''})</span></td>
         </tr>`;
       }).join('')
     : `<tr>
-        <td style="padding:.5rem;border-bottom:1px solid #eee;color:#666;width:40%">Documentos</td>
-        <td style="padding:.5rem;border-bottom:1px solid #eee">Sin documentos adjuntos</td>
+        <td style="padding:.5rem;border-bottom:1px solid #888;color:#666;width:40%">Documentos</td>
+        <td style="padding:.5rem;border-bottom:1px solid #888">Sin documentos adjuntos</td>
       </tr>`;
 
   const document_rows_text = docs.length
@@ -131,11 +199,16 @@ async function sendResponsibleEmail(supplier) {
       }).join('\n')
     : '- Sin documentos adjuntos';
 
+  // ── Datos completos del proveedor ─────────────────────────────────────────
+  const { all_data_rows_html, all_data_rows_text } = buildProfileRows(supplier);
+
   const templateData = {
     ...supplier,
     document_names,
     document_rows_html,
     document_rows_text,
+    all_data_rows_html,
+    all_data_rows_text,
     admin_email: process.env.ADMIN_EMAIL || process.env.DEFAULT_RESPONSIBLE_EMAIL || '',
     portal_url: process.env.PORTAL_URL || process.env.PORTAL_FRONTEND_URL || process.env.FRONTEND_ORIGIN || 'http://localhost:8000'
   };
