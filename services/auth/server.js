@@ -34,6 +34,7 @@ const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || 'portal@tuempresa.com';
 const PORTAL_URL = process.env.PORTAL_URL || `http://localhost:${PORT}`;
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@tuempresa.com').trim().toLowerCase();
 
 const SESSION_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || crypto.randomBytes(21).toString('hex');
 const SESSION_NAME = process.env.SESSION_NAME || 'portal.sid';
@@ -47,7 +48,7 @@ const DB_PATH = process.env.AUTH_DB_PATH || path.join(DATA_PATH, 'auth.json');
 const SUPPLIERS_DB_PATH = process.env.GESTION_DB_PATH || path.join(DATA_PATH, 'suppliers.json');
 const ROLES_ROUTES_PATH = path.join(DATA_PATH, 'roles_routes.json');
 
-const TEMPLATES_DIR = path.join(__dirname, 'email-templates');
+const TEMPLATES_PATH = path.join(__dirname, '..', '..', 'email-templates');
 
 // ── Mapa de páginas permitidas por rol ───────────────────────────────────────────────
 const DEFAULT_ROLE_PAGES = {
@@ -157,21 +158,24 @@ function getDefaultRedirect(role) {
 
 // ── Template engine ──────────────────────────────────────────────────────────────────
 /**
- * Carga un fichero de plantilla y reemplaza los tokens {{variable}} con los valores
- * del objeto `vars`. Lanza si el fichero no existe para detectar errores en despliegue.
+ * Carga una plantilla unificada (JSON + ficheros HTML/TXT) y realiza las sustituciones.
  *
- * @param {string} templateName - Nombre base sin extensión (ej. 'otp', 'invite')
- * @param {'html'|'txt'} ext    - Extensión del fichero
+ * @param {string} name - Nombre base de la plantilla (ej. 'otp', 'invite')
  * @param {Record<string,string>} vars - Variables a sustituir
- * @returns {string}
+ * @returns {{subject: string, html: string, text: string}}
  */
-function renderTemplate(templateName, ext, vars) {
-  const filePath = path.join(TEMPLATES_DIR, `${templateName}.${ext}`);
-  let content = fs.readFileSync(filePath, 'utf8');
-  for (const [key, value] of Object.entries(vars)) {
-    content = content.replaceAll(`{{${key}}}`, String(value ?? ''));
-  }
-  return content;
+function renderTemplate(name, vars) {
+  const jsonPath = path.join(TEMPLATES_PATH, `${name}.json`);
+  const template = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+
+  const replacer = (str) =>
+    str.replace(/\{\{(\w+)\}\}/g, (_, key) => String(vars[key] ?? ''));
+
+  return {
+    subject: replacer(template.subject || ''),
+    html: replacer(fs.readFileSync(path.join(TEMPLATES_PATH, template.html), 'utf8')),
+    text: replacer(fs.readFileSync(path.join(TEMPLATES_PATH, template.text), 'utf8'))
+  };
 }
 
 // ── Mailer ───────────────────────────────────────────────────────────────────────────
@@ -192,15 +196,19 @@ async function sendOtpEmail(to, otp) {
 
   const vars = {
     otp,
-    otp_ttl_minutes: Math.floor(OTP_TTL / 60)
+    otp_ttl_minutes: Math.floor(OTP_TTL / 60),
+    admin_email: ADMIN_EMAIL,
+    portal_url: PORTAL_URL
   };
+
+  const { subject, html, text } = renderTemplate('otp', vars);
 
   await transporter.sendMail({
     from: SMTP_FROM,
     to,
-    subject: `Tu código de acceso: ${otp}`,
-    text: renderTemplate('otp', 'txt', vars),
-    html: renderTemplate('otp', 'html', vars)
+    subject,
+    text,
+    html
   });
 }
 
@@ -211,15 +219,18 @@ async function sendInviteEmail(to) {
 
   const vars = {
     email: to,
-    portal_url: PORTAL_URL
+    portal_url: PORTAL_URL,
+    admin_email: ADMIN_EMAIL
   };
+
+  const { subject, html, text } = renderTemplate('invite', vars);
 
   await transporter.sendMail({
     from: SMTP_FROM,
     to,
-    subject: 'Invitación al Portal de Proveedores',
-    text: renderTemplate('invite', 'txt', vars),
-    html: renderTemplate('invite', 'html', vars)
+    subject,
+    text,
+    html
   });
 }
 

@@ -1,0 +1,9 @@
+Hola,
+
+Se ha actualizado el perfil del proveedor {{razon_social}}.
+
+Documentos actualizados:
+{{document_rows_text}}
+
+Puedes revisar los cambios completos en el portal: {{portal_url}}
+Contacto: {{admin_email}}

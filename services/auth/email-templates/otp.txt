@@ -1,8 +1,0 @@
-Portal de Proveedores
-
-Tu código de acceso es: {{otp}}
-
-Válido durante {{otp_ttl_minutes}} minutos.
-Si no solicitaste este código, ignóralo.
-
-Si necesitas ayuda, contacta a {{admin_email}}.

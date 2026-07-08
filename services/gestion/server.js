@@ -32,22 +32,15 @@ const AUTH_DB_PATH = path.join(DATA_PATH, 'auth.json');
 const DB_PATH = process.env.GESTION_DB_PATH || path.join(DATA_PATH, 'suppliers.json');
 
 // ── Plantillas de correo ───────────────────────────────────────────────────────
-const TEMPLATES_PATH = path.join(__dirname, 'email-templates');
+const TEMPLATES_PATH = path.join(__dirname, '..', '..', 'email-templates');
 
-function loadEmailTemplate(name) {
-  const file = path.join(TEMPLATES_PATH, `${name}.json`);
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch (e) {
-    console.error(`[gestion] No se pudo cargar plantilla '${name}':`, e.message);
-    return null;
-  }
-}
+function renderTemplate(name, data) {
+  const jsonPath = path.join(TEMPLATES_PATH, `${name}.json`);
+  const template = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 
-function renderTemplate(template, data) {
-  let subject = template.subject || '';
-  let html = template.html || '';
-  let text = template.text || '';
+  const subjectRaw = template.subject || '';
+  const htmlRaw = fs.readFileSync(path.join(TEMPLATES_PATH, template.html), 'utf8');
+  const textRaw = fs.readFileSync(path.join(TEMPLATES_PATH, template.text), 'utf8');
 
   const replacer = (str) =>
     str.replace(/\{\{(\w+)\}\}/g, (_, key) => {
@@ -58,9 +51,9 @@ function renderTemplate(template, data) {
     });
 
   return {
-    subject: replacer(subject),
-    html: replacer(html),
-    text: replacer(text)
+    subject: replacer(subjectRaw),
+    html: replacer(htmlRaw),
+    text: replacer(textRaw)
   };
 }
 
@@ -89,14 +82,16 @@ function sanitizeEmail(email) {
 }
 
 async function sendResponsibleEmail(supplier) {
-  const to = supplier.responsible_email || process.env.DEFAULT_RESPONSIBLE_EMAIL;
-  if (!to) {
-    console.warn('[gestion] sendResponsibleEmail: no hay responsible_email ni DEFAULT_RESPONSIBLE_EMAIL configurado.');
+  const gestEmail = process.env.GEST_EMAIL;
+  const responsibleEmail = supplier.responsible_email || process.env.DEFAULT_RESPONSIBLE_EMAIL;
+
+  if (!gestEmail && !responsibleEmail) {
+    console.warn('[gestion] sendResponsibleEmail: no hay destinatarios configurados (GEST_EMAIL o responsable).');
     return;
   }
 
-  const tpl = loadEmailTemplate('perfil-actualizado');
-  if (!tpl) return;
+  const to = gestEmail || responsibleEmail;
+  const cc = gestEmail ? responsibleEmail : undefined;
 
   // ── Ruta correcta de documentos ──────────────────────────────────────────────
   // El servicio de archivos guarda los ficheros en:
@@ -140,10 +135,14 @@ async function sendResponsibleEmail(supplier) {
     ...supplier,
     document_names,
     document_rows_html,
-    document_rows_text
+    document_rows_text,
+    admin_email: process.env.ADMIN_EMAIL || process.env.DEFAULT_RESPONSIBLE_EMAIL || '',
+    portal_url: process.env.PORTAL_URL || process.env.PORTAL_FRONTEND_URL || process.env.FRONTEND_ORIGIN || 'http://localhost:8000'
   };
 
-  const { subject, html, text } = renderTemplate(tpl, templateData);
+  const rendered = renderTemplate('perfil-actualizado', templateData);
+  if (!rendered) return;
+  const { subject, html, text } = rendered;
   const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'portal@empresa.local';
 
   const attachments = docs
@@ -164,8 +163,8 @@ async function sendResponsibleEmail(supplier) {
 
   try {
     const transport = createTransport();
-    await transport.sendMail({ from, to, subject, html, text, attachments });
-    console.log(`[gestion] Correo enviado a ${to} para proveedor ${supplier.id} con ${attachments.length} adjuntos`);
+    await transport.sendMail({ from, to, cc, subject, html, text, attachments });
+    console.log(`[gestion] Correo enviado a ${to}${cc ? ' con CC a ' + cc : ''} para proveedor ${supplier.id} con ${attachments.length} adjuntos`);
   } catch (e) {
     console.error('[gestion] Error enviando correo de notificación:', e.message);
   }
@@ -342,6 +341,25 @@ function hasMinimum(s) {
   return s.razon_social && s.nif && s.persona_contacto && s.iban;
 }
 
+/**
+ * Devuelve true si el body del PUT contiene únicamente la actualización
+ * de documentos, sin cambios reales de perfil.
+ */
+function isDocumentsOnlyUpdate(body) {
+  const profileFields = [
+    'razon_social', 'nombre_comercial', 'nif', 'actividad', 'tipo_via', 'direccion',
+    'codigo_postal', 'provincia', 'ciudad', 'pais_residencia_fiscal', 'persona_contacto',
+    'email_contacto', 'telefono', 'iban', 'swift', 'banco', 'sucursal',
+    'codigo_entidad', 'codigo_sucursal', 'moneda_pago', 'alta_036', 'status',
+    'responsible_email'
+  ];
+
+  return (
+    Array.isArray(body.documents) &&
+    !profileFields.some(f => f in body)
+  );
+}
+
 function updateUserStatus(db, email, status) {
   const user = db.users.find(u => u.email === email);
   if (!user) return null;
@@ -376,6 +394,8 @@ app.put('/suppliers/me', authenticate, async (req, res) => {
   const db = loadDB();
   const email = req.user.email || req.user.sub;
   let s = db.suppliers.find(x => x.email === email);
+
+  const documentsOnly = isDocumentsOnlyUpdate(req.body);
 
   const updates = {};
   ALLOWED_FIELDS.forEach(f => {
@@ -425,7 +445,11 @@ app.put('/suppliers/me', authenticate, async (req, res) => {
   // Sincronizar estado en auth.json
   syncUserStatusInAuthDB(email, s.status);
 
-  sendResponsibleEmail(s).catch(e => console.error('[gestion] sendResponsibleEmail error:', e.message));
+  if (!documentsOnly && hasMinimum(s)) {
+    sendResponsibleEmail(s).catch(e => console.error('[gestion] sendResponsibleEmail error:', e.message));
+  } else {
+    console.log(`[gestion] PUT /suppliers/me: correo omitido (documentsOnly=${documentsOnly}, hasMinimum=${hasMinimum(s)})`);
+  }
 
   res.json(s);
 });
@@ -446,6 +470,8 @@ app.put('/suppliers/admin/:id', authenticate, requireAdmin, async (req, res) => 
   const db = loadDB();
   const s = db.suppliers.find(x => x.id === req.params.id);
   if (!s) return res.status(404).json({ detail: 'Proveedor no encontrado.' });
+
+  const documentsOnly = isDocumentsOnlyUpdate(req.body);
 
   const updates = {};
   [...ALLOWED_FIELDS, ...ADMIN_FIELDS].forEach(f => {
@@ -480,39 +506,48 @@ app.put('/suppliers/admin/:id', authenticate, requireAdmin, async (req, res) => 
   // Sincronizar estado en auth.json
   syncUserStatusInAuthDB(s.email, s.status);
 
-  sendResponsibleEmail(s).catch(e => console.error('[gestion] sendResponsibleEmail error:', e.message));
+  if (!documentsOnly && hasMinimum(s)) {
+    sendResponsibleEmail(s).catch(e => console.error('[gestion] sendResponsibleEmail error:', e.message));
+  } else {
+    console.log(`[gestion] PUT /suppliers/admin/:id: correo omitido (documentsOnly=${documentsOnly}, hasMinimum=${hasMinimum(s)})`);
+  }
 
   res.json(s);
 });
 
-async function sendSupplierRejectionEmail(supplier, observations) {
+async function sendSupplierStatusEmail(supplier, status, observations) {
   const to = supplier.email || supplier.responsible_email || process.env.DEFAULT_RESPONSIBLE_EMAIL;
   if (!to) {
-    console.warn(`[gestion] sendSupplierRejectionEmail: proveedor ${supplier.id} sin email de destino`);
+    console.warn(`[gestion] sendSupplierStatusEmail: proveedor ${supplier.id} sin email de destino`);
     return;
   }
 
-  const tpl = loadEmailTemplate('supplier-rejected');
-  if (!tpl) return;
-
+  const statusText = status === 'aprobado' ? 'aprobada' : 'rechazada';
   const supplierName = supplier.alias || supplier.razon_social || supplier.nombre_comercial || supplier.name || supplier.email || 'proveedor';
   const portalUrl = process.env.PORTAL_URL || process.env.PORTAL_FRONTEND_URL || process.env.FRONTEND_ORIGIN || 'http://localhost:8000';
 
-  const { subject, html, text } = renderTemplate(tpl, {
+  const obsTrimmed = String(observations || '').trim();
+  const templateData = {
     supplier_name: supplierName,
-    observations: observations || '',
+    status_text: statusText,
+    observations_html: obsTrimmed ? `<p><strong>Observaciones:</strong></p><div style="padding:12px 14px;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;white-space:pre-wrap">${obsTrimmed}</div>` : '',
+    observations_text: obsTrimmed ? `\nObservaciones:\n${obsTrimmed}\n` : '',
     portal_url: portalUrl,
     admin_email: process.env.ADMIN_EMAIL || process.env.DEFAULT_RESPONSIBLE_EMAIL || ''
-  });
+  };
+
+  const rendered = renderTemplate('supplier-result', templateData);
+  if (!rendered) return;
+  const { subject, html, text } = rendered;
 
   const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'portal@empresa.local';
 
   try {
     const transport = createTransport();
     await transport.sendMail({ from, to, subject, html, text });
-    console.log(`[gestion] Correo de rechazo enviado a ${to} para proveedor ${supplier.id}`);
+    console.log(`[gestion] Correo de resultado (${status}) enviado a ${to} para proveedor ${supplier.id}`);
   } catch (e) {
-    console.error('[gestion] Error enviando correo de rechazo:', e.message);
+    console.error(`[gestion] Error enviando correo de resultado (${status}):`, e.message);
   }
 }
 
@@ -545,8 +580,8 @@ app.patch('/suppliers/admin/:id/status', authenticate, requireAdmin, async (req,
   // Mantener acceso al portal incluso si está rechazado, para que pueda corregir datos.
   syncUserStatusInAuthDB(s.email, status === 'rechazado' ? 'revision' : status);
 
-  if (status === 'rechazado') {
-    await sendSupplierRejectionEmail(s, rejectionNote);
+  if (status === 'rechazado' || status === 'aprobado') {
+    await sendSupplierStatusEmail(s, status, rejectionNote);
   }
 
   res.json(s);

@@ -1,0 +1,5 @@
+{
+  "subject": "Tu código de acceso: {{otp}}",
+  "html": "otp.html",
+  "text": "otp.txt"
+}
