@@ -603,8 +603,8 @@ async function sendSupplierStatusEmail(supplier, status, observations) {
   const templateData = {
     supplier_name: supplierName,
     status_text: statusText,
-    observations_html: obsTrimmed ? `<p><strong>Observaciones:</strong></p><div style="padding:12px 14px;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;white-space:pre-wrap">${obsTrimmed}</div>` : '',
-    observations_text: obsTrimmed ? `\nObservaciones:\n${obsTrimmed}\n` : '',
+    observations_html: obsTrimmed ? `<p><strong>Comentarios:</strong></p><div style="padding:12px 14px;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;white-space:pre-wrap">${obsTrimmed}</div>` : '',
+    observations_text: obsTrimmed ? `\nComentarios:\n${obsTrimmed}\n` : '',
     portal_url: portalUrl,
     admin_email: process.env.ADMIN_EMAIL || process.env.DEFAULT_RESPONSIBLE_EMAIL || ''
   };
