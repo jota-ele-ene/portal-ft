@@ -68,6 +68,24 @@
         if (id === 'summary_status') setBadge(id, value);
       });
 
+      // Deshabilitar botón Editar mientras el perfil está en revisión (solo para el propio supplier)
+      if (!supplierId) {
+        const editBtn = document.getElementById('editProfileBtn');
+        if (editBtn) {
+          if (data.status === 'revision') {
+            editBtn.disabled = true;
+            editBtn.title = 'Tu perfil está en revisión. No puedes editarlo hasta que el administrador lo revise.';
+            editBtn.style.opacity = '0.5';
+            editBtn.style.cursor = 'not-allowed';
+          } else {
+            editBtn.disabled = false;
+            editBtn.title = '';
+            editBtn.style.opacity = '';
+            editBtn.style.cursor = '';
+          }
+        }
+      }
+
       // Mostrar/ocultar bloque de observaciones de rechazo
       const obsBlock = document.getElementById('rejection-observations-block');
       const obsText  = document.getElementById('summary_observations');

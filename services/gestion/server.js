@@ -312,9 +312,30 @@ function getOrCreate(db, email) {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-    //db.suppliers.push(s);
+    return s;
   }
-  return s;
+
+  // Normalizar suppliers invitados para que el formulario pueda prerrellenar
+  return {
+    ...s,
+    razon_social: s.razon_social || s.alias || '',
+    nombre_comercial: s.nombre_comercial || s.alias || '',
+    persona_contacto: s.persona_contacto || s.alias || '',
+    email_contacto: s.email_contacto || s.email || '',
+    telefono: s.telefono || '',
+    direccion: s.direccion || '',
+    codigo_postal: s.codigo_postal || '',
+    ciudad: s.ciudad || '',
+    pais_residencia_fiscal: s.pais_residencia_fiscal || 'España',
+    iban: s.iban || '',
+    swift: s.swift || '',
+    banco: s.banco || '',
+    sucursal: s.sucursal || '',
+    codigo_entidad: s.codigo_entidad || '',
+    codigo_sucursal: s.codigo_sucursal || '',
+    moneda_pago: s.moneda_pago || 'EUR',
+    alta_036: typeof s.alta_036 === 'boolean' ? s.alta_036 : null
+  };
 }
 
 function hasMinimum(s) {

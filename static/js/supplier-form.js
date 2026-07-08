@@ -352,10 +352,12 @@ function isValidNifNieCif(value) {
     let sumB = 0;
     digits.forEach((digit, index) => {
       if (index % 2 === 0) {
-        sumA += digit;
-      } else {
+        // Posiciones impares (1, 3, 5, 7) -> índices 0, 2, 4, 6
         const doubled = digit * 2;
         sumB += Math.floor(doubled / 10) + (doubled % 10);
+      } else {
+        // Posiciones pares (2, 4, 6) -> índices 1, 3, 5
+        sumA += digit;
       }
     });
     const total = sumA + sumB;
@@ -607,9 +609,12 @@ async function saveSupplierData(submit = false) {
     updateStatusBadges(saved);
     showToast(
       submit ? '¡Datos guardados correctamente!' : 'Borrador guardado.',
-      'success',
-      submit ? () => window.location.href = cancelUrl() : null
+      'success'
     );
+    if (submit) {
+      // Redirigir inmediatamente a /perfil tras envío para revisión
+      setTimeout(() => { window.location.href = cancelUrl(); }, 1500);
+    }
   } catch (e) {
     showToast(e.message || 'Error al guardar.', 'error');
   } finally {

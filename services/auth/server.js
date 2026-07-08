@@ -228,10 +228,14 @@ function generateOtp() {
   return String(crypto.randomInt(100000, 999999));
 }
 
+// Busca en auth.json (admin y user) y también en suppliers.json como fallback
 function isAuthorizedEmail(db, email) {
   const emailLower = String(email || '').toLowerCase().trim();
   if (!emailLower) return false;
-  return db.users.some(u => u.email === emailLower);
+  if (db.users.some(u => u.email === emailLower)) return true;
+  // Suppliers invitados no están en auth.json → buscar en suppliers.json
+  const sdb = loadSuppliersDB();
+  return sdb.suppliers.some(s => s.email === emailLower);
 }
 
 function getUser(db, email) {
@@ -377,11 +381,24 @@ app.post('/auth/otp/verify', (req, res) => {
   }
 
   record.used = true;
-  const user = getUser(db, emailLower);
-  if (!user) {
-    return res.status(404).json({ detail: 'Usuario no encontrado.' });
-  }
   saveDB(db);
+
+  let user = getUser(db, emailLower);
+
+  if (!user) {
+    // Supplier invitado: construir objeto de sesión desde suppliers.json
+    const sdb = loadSuppliersDB();
+    const supplier = sdb.suppliers.find(s => s.email === emailLower);
+    if (!supplier) {
+      return res.status(404).json({ detail: 'Usuario no encontrado.' });
+    }
+    user = {
+      id: supplier.id,
+      email: supplier.email,
+      role: 'supplier',
+      status: supplier.status || 'invited'
+    };
+  }
 
   const redirectTo = getDefaultRedirect(user.role);
   const allowedPages = getAllowedPages(user.role);
@@ -424,6 +441,7 @@ app.post('/auth/invite', authenticate, requireAdminOrUser, async (req, res) => {
     return res.status(409).json({ detail: 'Ese correo ya está registrado.' });
   }
 
+  /*
   const user = {
     id: crypto.randomUUID(),
     email: emailLower,
@@ -434,6 +452,7 @@ app.post('/auth/invite', authenticate, requireAdminOrUser, async (req, res) => {
 
   db.users.push(user);
   saveDB(db);
+  */
 
   try {
     const sdb = loadSuppliersDB();
